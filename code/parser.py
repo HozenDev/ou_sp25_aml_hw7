@@ -157,6 +157,10 @@ def create_parser():
     parser.add_argument('--steps_per_epoch', type=int, default=None, help="Number of training batches per epoch (must use --repeat if you are using this)")
     parser.add_argument('--no_use_py_func', action='store_true', help="False = use py_function in creating the dataset")
 
+    parser.add_argument('--nsteps', type=int, default=50, help='Number of diffusion steps')
+    parser.add_argument('--time_sampling_exponent', type=float, default=0.0, help='Bias for timestep sampling')
+    parser.add_argument('--train_filt', type=str, default='*[012345678]', help='File filter for training set')
+
     # Image Augmentation: REVISIT TODO
     #parser.add_argument('--rotation_range', type=int, default=0, help="Image Generator: rotation range")
     #parser.add_argument('--width_shift_range', type=int, default=0, help="Image Generator: width shift range")

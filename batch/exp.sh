@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-#SBATCH --partition=disc_dual_a100_students
+#SBATCH --partition=gpu_a100
 #SBATCH --cpus-per-task=64
 #SBATCH --gres=gpu:1
 #SBATCH --mem=80G
@@ -23,7 +23,6 @@ CONFIG_DIR=configs
 
 ## SHALLOW
 python ${CODE_DIR}/main.py \
-       @${CONFIG_DIR}/exp.txt \
        @${CONFIG_DIR}/oscer.txt \
        @${CONFIG_DIR}/net.txt --label NET \
        --exp_index $SLURM_ARRAY_TASK_ID \

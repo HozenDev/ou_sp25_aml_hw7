@@ -11,7 +11,8 @@ Semantic labeling of the Chesapeake Bay
 #                           Imports                             #
 #################################################################
 
-from chesapeake_loader4 import create_datasets
+from chesapeake_loader4 import create_diffusion_dataset
+from diffusion_tools import compute_beta_alpha
 import tensorflow as tf
 
 # Gpus initialization
@@ -97,15 +98,27 @@ def execute_exp(args, multi_gpus:int=1):
     if args.verbose >= 3:
         print('Starting data flow')
 
-    ds_train, ds_validation, ds_testing, n_classes = create_datasets(base_dir=args.dataset,
-                                                                     fold=args.rotation,
-                                                                     train_filt='*[012345678]',
-                                                                     cache_dir=args.cache,
-                                                                     repeat_train=args.repeat,
-                                                                     shuffle_train=args.shuffle,
-                                                                     batch_size=args.batch,
-                                                                     prefetch=args.prefetch,
-                                                                     num_parallel_calls=args.num_parallel_calls)
+    # Compute alpha schedule for HW7 diffusion
+    _, alpha, _ = compute_beta_alpha(
+        nsteps=args.nsteps if hasattr(args, 'nsteps') else 50,
+        beta_start=0.0001,
+        beta_end=0.02
+    )
+        
+    ds_train, ds_valid = create_diffusion_dataset(
+        alpha=alpha,
+        base_dir=args.dataset,
+        patch_size=args.image_size[0],
+        fold=args.rotation,
+        filt=args.train_filt if hasattr(args, 'train_filt') else '*[012345678]',
+        cache_dir=args.cache,
+        repeat=args.repeat,
+        shuffle=args.shuffle,
+        batch_size=args.batch,
+        prefetch=args.prefetch,
+        num_parallel_calls=args.num_parallel_calls,
+        time_sampling_exponent=args.time_sampling_exponent if hasattr(args, 'time_sampling_exponent') else 0.0
+    )
 
     #################################
     #       Model Configuration     #
@@ -151,16 +164,14 @@ def execute_exp(args, multi_gpus:int=1):
         with mirrored_strategy.scope():
             # Build network: you must provide your own implementation
             model = create_diffusion_network(image_size=image_size,
-                nchannels=nchannels,
                 conv_layers=conv_layers,
                 dense_layers=dense_layers,
                 p_dropout=args.dropout,
                 p_spatial_dropout=args.spatial_dropout,
                 lambda_l2=args.L2_regularization,
                 lrate=args.lrate,
-                n_classes=n_classes,
-                loss=keras.losses.SparseCategoricalCrossentropy(),
-                metrics=[keras.metrics.SparseCategoricalAccuracy()],
+                loss = keras.losses.MeanSquaredError(),
+                metrics = [keras.metrics.MeanAbsoluteError()],
                 padding=args.padding,
                 conv_activation=args.activation_conv,
                 dense_activation=args.activation_dense)
@@ -169,19 +180,17 @@ def execute_exp(args, multi_gpus:int=1):
         # Single GPU
         # Build network: you must provide your own implementation
         model = create_diffusion_network(image_size=image_size,
-                                         nchannels=nchannels,
-                                         conv_layers=conv_layers,
-                                         dense_layers=dense_layers,
-                                         p_dropout=args.dropout,
-                                         p_spatial_dropout=args.spatial_dropout,
-                                         lambda_l2=args.L2_regularization,
-                                         lrate=args.lrate,
-                                         n_classes=n_classes,
-                                         loss=keras.losses.SparseCategoricalCrossentropy(),
-                                         metrics=[keras.metrics.SparseCategoricalAccuracy()],
-                                         padding=args.padding,
-                                         conv_activation=args.activation_conv,
-                                         dense_activation=args.activation_dense)
+                conv_layers=conv_layers,
+                dense_layers=dense_layers,
+                p_dropout=args.dropout,
+                p_spatial_dropout=args.spatial_dropout,
+                lambda_l2=args.L2_regularization,
+                lrate=args.lrate,
+                loss = keras.losses.MeanSquaredError(),
+                metrics = [keras.metrics.MeanAbsoluteError()],
+                padding=args.padding,
+                conv_activation=args.activation_conv,
+                dense_activation=args.activation_dense)
     
     # Report model structure if verbosity is turned on
     if args.verbose >= 1:
@@ -249,7 +258,7 @@ def execute_exp(args, multi_gpus:int=1):
                         epochs=args.epochs,
                         steps_per_epoch=args.steps_per_epoch,
                         verbose=args.verbose>=2,
-                        validation_data=ds_validation,
+                        validation_data=ds_valid,
                         validation_steps=None,
                         callbacks=cbs)
 
@@ -265,30 +274,20 @@ def execute_exp(args, multi_gpus:int=1):
     print('Validation')
     results['args'] = args
     # results_predict_validation = model.predict(ds_validation)
-    results_predict_validation_eval = model.evaluate(ds_validation)
-    # results['predict_validation'] = model.predict(ds_validation)
-    # results['predict_validation_eval'] = model.evaluate(ds_validation)
+    results_predict_validation_eval = model.evaluate(ds_valid)
+    # results['predict_validation'] = model.predict(ds_valid)
+    # results['predict_validation_eval'] = model.evaluate(ds_valid)
     wandb.log({'final_val_loss': results_predict_validation_eval[0]})
-    wandb.log({'final_val_sparse_categorical_accuracy': results_predict_validation_eval[1]})
-
-    # Test set
-    if ds_testing is not None:
-        print('#################')
-        print('Testing')
-        results['predict_testing'] = model.predict(ds_testing)
-        results['predict_testing_eval'] = model.evaluate(ds_testing)
-        wandb.log({'final_test_loss': results['predict_testing_eval'][0]})
-        wandb.log({'final_test_sparse_categorical_accuracy': results['predict_testing_eval'][1]})
-
+    wandb.log({'final_val_mae': results_predict_validation_eval[1]})
+    
     # Training set
     print('#################')
     print('Training')
     results_predict_training_eval = model.evaluate(ds_train)
     # results['predict_training'] = model.predict(ds_train)
     # results['predict_training_eval'] = model.evaluate(ds_train)
-
     wandb.log({'final_train_loss': results_predict_training_eval[0]})
-    wandb.log({'final_train_sparse_categorical_accuracy': results_predict_training_eval[1]})
+    wandb.log({'final_train_mae': results_predict_training_eval[1]})
 
     # History
     # results['history'] = history.history
