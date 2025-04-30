@@ -1,0 +1,189 @@
+* Setup :ignore:
+
+#+SETUPFILE: ~/public/hozen-style/latex/hozen.setup
+
+# Ensure that we respect org mode new line
+# #+OPTIONS: \n:t
+
+# To disbale _ and ^ behaviour but keep ^{} and _{}
+#+OPTIONS: ^:{}
+
+#+LATEX_HEADER: \usepackage[linesnumbered]{algorithm2e}
+#+LATEX_HEADER: \usepackage[inkscapelatex=false]{svg}
+
+* Page de garde :ignore:
+** Informations :ignore:
+
+#+AUTHOR: Author: Enzo Durel
+#+AUTHOR: \newline
+#+AUTHOR: 
+#+EMAIL: /
+#+TITLE: 5043 Advanced Machine Learning - HW 4
+#+OPTIONS: toc:nil
+
+** Logo :ignore:
+
+#+ATTR_LATEX: :width 10cm :align left
+[[file:~/orgmode_latex_export_img/ou_logo.png]]
+
+** newpage :noexport:
+
+#+begin_export latex
+\newpage
+#+end_export
+
+** Table des matières :ignore:
+
+#+LATEX: \thispagestyle{empty}
+#+TOC: headlines 3
+#+LATEX: \clearpage
+#+LATEX: \pagenumbering{arabic} 
+
+** Liste des figures :ignore:
+
+#+begin_export latex
+\thispagestyle{empty}
+\listoffigures
+\clearpage
+\pagenumbering{arabic} 
+#+end_export
+
+** Liste des algorithmes :noexport:
+
+#+begin_export latex
+\thispagestyle{empty}
+\listofalgorithms
+\clearpage
+\pagenumbering{arabic} 
+#+end_export
+
+** newpage :ignore:
+
+#+begin_export latex
+\newpage
+#+end_export
+
+* Figures
+** Figure 1a
+
+#+caption: Shallow Model Architecture
+#+attr_latex: :height 18cm :float nil
+[[file:./img/arch_shallow.png]]
+
+** Figure 1b
+
+#+attr_latex: :height 20cm :float nil
+[[file:./img/slice_arch_deep_1.png]]
+
+#+attr_latex: :height 20cm :float nil
+[[file:./img/slice_arch_deep_2.png]]
+
+#+caption: Deep Model Architecture
+#+attr_latex: :height 20cm :float nil
+[[file:./img/slice_arch_deep_3.png]]
+
+We can see in the deep model architecture the "skip lines" used by the U-Net. We can also see the encoder/decoder pattern clearly.
+** Figure 2a
+
+#+caption: Validation Accuracy as a function of epoch for the Shallow model
+#+attr_latex: :width 12cm :float nil
+[[file:./img/shallow_acc.png]]
+
+** Figure 2b
+
+#+caption: Validation Loss as a function of epoch for the Deep models
+#+attr_latex: :width 12cm :float nil
+[[file:./img/deep_acc.png]]
+
+We can see that deep models are a lot more stable than shallow models during the training.
+
+** Figure 3a
+
+#+caption: Confusion Matrix of the test set data across all rotations for the Shallow model
+#+attr_latex: :width 12cm :float nil
+[[file:./img/figure_3a.png]]
+
+** Figure 3b
+
+#+caption: Confusion Matrix of the test set data across all rotations for the Deep model
+#+attr_latex: :width 12cm :float nil
+[[file:./img/figure_3b.png]]
+
+We can see that the deep model correctly detects more of all classes but also makes more "smoothly" the misdetection in other classes. It seems that there are a lot of class 2 and 3 and it is the main difficulty to clearly identify these without mixing them up.
+
+** Figure 4
+
+#+caption: Test set accuracy for the deep vs shallow networks
+#+attr_latex: :width 10cm :float nil
+[[file:./img/figure_4.png]]
+
+We clearly see that the deep model is more accurate in every rotation (folds).
+
+** Figure 5a
+
+#+caption: Example Predictions for Shallow Model
+#+attr_latex: :height 20cm :float nil
+[[file:./img/figure_5a.png]]
+
+** Figure 5b
+
+#+caption: Example Predictions for Deep Model
+#+attr_latex: :height 20cm :float nil
+[[file:./img/figure_5b.png]]
+
+We can see that the shallow model struggles to identify big areas and makes prediction very "noisy". The deep model makes "smoother" prediction and sometimes makes it too smooth and misses some key points. 
+
+** newpage :ignore:
+
+#+begin_src latex
+\newpage
+#+end_src
+
+* Analysis & Discussion
+** /"What regularization choices did you make for your shallow and deep networks? Why?"/
+
+I chose to use l2 regularization, dropout and spatial dropout for my both models. I have a l2 equal to 0.0001, a dropout of 0.2 and a spatial dropout of 0.1 for the shallow model. I have a l2 equals to 0.0001, a dropout of 0.4 and a spatial dropout of 0.2.\\
+
+The regularization is bigger in my deep model because bigger models tend to overfit more than shallow ones. For my deep model I also add batch normalization to accelerate training and add some "noise" which can help not to overfit.
+
+** /"How do the training times compare between the two model types?"/
+
+The training times for my shallow model takes on average 45 minutes. The training of the deep model takes me around 1h and 10 minutes. I have a learning rate for my shallow network bigger than the one on the deep model. The goal here was to avoid overfitting because the deep model is bigger than the shallow model.\\
+
+We can see that the deep model performs better than the shallow model (88%-90% vs. 92%-93%). Moreover, we can see that the validations curves are more stable for deep models than shallow models.\\
+
+Finally, the training time of the shallow model is faster than the deep model training time.
+
+** /"Describe the relative test set performance of the two model types."/
+*** Shallow Network Accuracy Results
+
+#+caption: Shallow Model Sparse Categorical Accuracy Accross 5 Folds
+#+attr_latex: :align |l|c|c|c|c|c|c|c|c| :float nil
+|-----------------------------+---------+--------+---------+---------+---------+---------+---------+--------|
+|                             |  Fold 0 | Fold 1 |  Fold 2 |  Fold 3 |  Fold 4 |     Min |     Max |   Mean |
+|-----------------------------+---------+--------+---------+---------+---------+---------+---------+--------|
+| Sparse Categorical Accuracy | 0.88336 | 0.8893 | 0.91178 | 0.89544 | 0.89362 | 0.88336 | 0.91178 | 0.8947 |
+|-----------------------------+---------+--------+---------+---------+---------+---------+---------+--------|
+#+TBLFM: @2$7=vmin($2..$6)::@2$8=vmax($2..$6)::@2$9=vmean($2..$6)
+
+*** Deep Network Accuracy Results
+
+#+caption: Deep Model Sparse Categorical Accuracy Accross 5 Folds
+#+attr_latex: :align |l|c|c|c|c|c|c|c|c| :float nil
+|-----------------------------+--------+---------+--------+--------+---------+---------+--------+----------|
+|                             | Fold 0 |  Fold 1 | Fold 2 | Fold 3 |  Fold 4 |     Min |    Max |     Mean |
+|-----------------------------+--------+---------+--------+--------+---------+---------+--------+----------|
+| Sparse Categorical Accuracy | 0.9191 | 0.91768 | 0.9332 | 0.9318 | 0.92368 | 0.91768 | 0.9332 | 0.925092 |
+|-----------------------------+--------+---------+--------+--------+---------+---------+--------+----------|
+#+TBLFM: @2$7=vmin($2..$6)::@2$8=vmax($2..$6)::@2$9=vmean($2..$6)
+
+We can see that the deep model have better results than the shallow model, we can see that with the mean, min and max accuracies showed in the tables. We can also see this in the scatter plot figure where the point are above (on the side of deep model) the diagonale.
+
+** /"Describe any qualitative differences between the outputs of the two model types. What types of errors do your models tend to make?"/
+
+We can see that the deep network has better performance with more details compared to the shallow network which can ignore entire zones. Moreover, we can see that the deep model correctly detects more of all classes but also makes more "smoothly" the misdetection in other classes. It seems that there are a lot of class 2 and 3 and it is the main difficulty to clearly identify these without mixing them up. This is clearly demonstrate in the predicted examples images.\\
+
+This makes the deep model more reliable than the shallow network and show that a little difference between accuracies can make a big deal in terms of quality representation.
+
+
+

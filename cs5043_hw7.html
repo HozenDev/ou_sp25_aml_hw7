@@ -1,0 +1,348 @@
+<html><head>
+<meta http-equiv="content-type" content="text/html; charset=windows-1252">
+<title>CS 5043: HW7</title>
+</head>
+
+<body>
+<h1>CS 5043: HW7: Conditional Diffusion Networks</h1>
+<h1>DRAFT</h1>
+
+Assignment notes:
+<ul>
+  <li>  Deadline: Thursday, May 1st @11:59pm.
+       <p>
+       
+  </p></li><li> Hand-in procedure: submit a zip file to Gradescope
+       <p>
+       
+  </p></li><li> This work is to be done on your own.   However, you may share
+       solution-specific code snippets in the open on  
+       Slack (only!), but not full solutions.  In addition, downloading
+       solution-specific code is not allowed. 
+       <p>
+
+</p></li></ul>
+
+<h2>The Problem</h2>
+
+We will generate synthetic satellite
+images that are conditioned on semantic image labels.  Here, we will
+use a Markov chain of models that slowly introduce noise into a real
+image (this is how we will generate our training data), and a reverse
+set of models that will start from a completely random image and
+slowly remove noise until a meaningful satellite image is revealed.
+
+<p>
+
+Your model will take as input:
+</p><ul>
+  <li> A noised image
+  </li><li> A time stamp (in the denoising sequencing)
+  </li><li> The semantic label image
+</li></ul>
+
+And produce as output a guess at the noise that must be removed from
+the input noised image in order to make it less noisy.
+
+<p>
+
+Once your model is trained, we will use it to generate synthetic
+images by:
+</p><ul>
+  <li> Randomly producing a noisy image (each pixel channel is drawn
+       from a standard Normal distribution)
+  </li><li> Over T time steps:
+       <ul>
+	 <li> Use the learned model to estimate the noise that must be
+	      removed
+	 </li><li> Subtract this estimate from the current image
+	 </li><li> Inject a small amount of new noise to help the search
+	      process
+	      
+       </li></ul>
+</li></ul>
+
+
+<h2>The Generator</h2>
+
+We have provided a new version of the chesapeake_loader4.py file with a
+new TF Dataset creator called <b>create_diffusion_dataset()</b>.  An
+example of its use is given in the hw7_examples.ipynb file.
+Following, Algorithm 18.1 in the book, this
+generator produces batches of examples.  For each example, the
+generator randomly selects a time step in the noising process to
+sample from and produces a single 2-tuple of the form:
+
+<ul>
+  <li> A dictionary of input tensors.  The names of the tensors are:
+       <ul>
+	 <li> <b>label_input</b> (shape: examples,R,C,7): A 1-hot encoded
+	      representation of the semantic labels
+	 </li><li> <b>image_input</b> (shape: examples,R,C,3): a noised
+	      version of the real image that corresponds to the
+	      labels.  Note: the individual channels are in the range 
+	      +/-1 (they have been scaled from 0...1 for you already)
+	 </li><li> <b>time_input</b> (shape: examples,1): An integer time
+	      index that is the step in the noising process that this
+	      sample was taken from.
+       </li></ul>
+       <p>
+  </p></li><li> A tensor of desired noise output (shape: examples,R,C,3).  Each
+       channel is drawn from a Normal distribution.  So, values can
+       take on any value, but they will largely be constrained in the
+       +/-1 range.
+       <p>
+</p></li></ul>
+
+<h2>The Model</h2>
+
+You should start from the semantic labeling U-net that you have
+already developed in HW 4.  The differences are:
+
+<ul>
+  <li> You now have 3 inputs. <b>NOTE: the names of these Inputs MUST
+       be the same as the dictionary key names used by the
+       generator.</b>  If you 
+       don't do this, then TF will not know how to connect the
+       generator values to the inputs of your model.
+       <p>
+
+  </p></li><li> You are predicting unbounded noise values.  Think about what
+       this means for your output non-linearity.
+       <p>
+       
+  </p></li><li> You can use MSE or MAE as the loss function.
+       <p>
+
+  </p></li><li> You should translate the position index into a form that can be
+       appended to the semantic labels.
+       <!--You have a couple of options:-->
+       <ul>
+	 <!--
+	 <LI> Copy a scaled version of this index (scaled so its
+	      value is in the range 0...1) across a plane that is the
+	      same size as your semantic labels: examples,R,C,1.
+	      <P>
+-->
+	 <li> Use the provided PositionEncoder layer that uses the
+	      same encoding from Attention: it takes as
+	      input a time step index and translates it into an
+	      embedding of a defined length.  The shape of this for
+	      every example is (examples,embedding_size).  I am
+	      experimenting with an embedding size of 30 right now.
+	      Then, copy the embedding vector to each pixels:
+	      examples,R,C,embedding_size. 
+	      <p>
+
+	      See keras.ops.expand_dims() and keras.ops.tile().
+	      </p><p>
+
+       </p></li></ul>
+       I provide the PositionEncoder class, and give examples of using
+       it and of copying a value across pixels in the examples notebook.
+       <p>
+
+  </p></li><li> I append the input image, semantic label image and the time
+       encoding "image" together as input to the U-net.  In addition,
+       I introduce the semantic labels and time encodings at each step
+       of the "up" side of the U (at the same time that the skip
+       connections are appended).  I scale these down to the right
+       sizes using AveragePooling2D.
+       <p>
+
+
+</p></li></ul>
+
+
+<!--
+<H2>The Fake Image Generator</H2>
+After you have trained your model, use the provided generator notebook
+to visualize the results.  A few notes:
+<UL>
+  <LI> The configuration of your image size, time steps, and the
+       training schedule parameters (alpha, beta, gamma) must be the
+       same as you use during the training process.
+       <P>
+  <LI> We are using one of our older TF Dataset generators to pull in
+       corresponding labels and true images (no need for the other
+       information). ****
+       <P>
+  <LI> 
+
+</UL>
+-->
+
+<h2>Provided Tools</h2>
+
+<b>diffusion_tools.py</b>
+<ul>
+  <li> compute_beta_alpha(): Generates sequences:
+       <ul>
+	 <li> beta: injected noise at each step t.  This is a linear function
+	 </li><li> alpha (paper: \bar{alpha}): injected noise from time 0 to time t
+	 </li><li> sigma: added noise level during the inference step
+       </li></ul>
+<p>
+
+  </p></li><li> compute_beta_alpha2(): Same, but using a sine shape for beta
+       <p>
+
+  </p></li><li> convert_image(): Converts each channel of an image that is
+       zero-centered and a standard deviation of about 1 into the range
+       0...1 
+       <p>
+
+  </p></li><li> PositionEncoder(): Position encoder layer from previous
+       homework
+       <p>
+
+</p></li></ul>
+
+<b>chesapeake_loader4.py</b>
+<p>
+
+Key function:
+</p><pre>       
+    ds_train, ds_valid = create_diffusion_dataset(
+        base_dir=args.dataset,
+        patch_size=args.image_size[0],
+        fold=args.rotation,
+        filt=args.train_filt,
+        cache_dir=args.cache,
+        repeat=args.repeat,
+        shuffle=args.shuffle,
+        batch_size=args.batch,
+        prefetch=args.prefetch,
+        num_parallel_calls=args.num_parallel_calls,
+        alpha=alpha,
+        time_sampling_exponent=args.time_sampling_exponent)
+</pre>       
+
+<h2>Training Process</h2>
+You can train your model using a conventional model.fit() process with
+early stopping (no meta models!).
+
+
+<h2>Inference Process</h2>
+
+I suggest doing this in a notebook.  To reload a saved model, you will
+need:
+
+<pre>model = keras.models.load_model(fname + '_model.h5', custom_objects={'PositionEncoder': PositionEncoder,
+                                                                     'ExpandDims': keras.src.ops.numpy.ExpandDims,
+                                                                     'Tile': keras.src.ops.numpy.Tile,
+                                                                     'mse': 'mse'})
+</pre>
+
+<h2>Experiments</h2>
+
+We are only working to get a single model running for this assignment.
+Once you have completed your main experiment, produce
+the following:
+
+<ol>
+  <li> Figure 0: Model architectures from plot_model()
+       <p>
+
+  </p></li><li> Figures 1a,b: Show training and validation set MSE (or MAE) as
+       a function of epoch. 
+       <p>
+       
+  </p></li><li> Figure 2: Show 2-3 examples of the model producing a new image
+       from noise.  Show each time step (or maybe every other time step).
+<p>
+
+  </p></li><li> Figure 3: Show a gallery of final images.
+<p>
+</p></li></ol>       
+
+<p></p><hr><p>
+
+
+
+
+</p><h2>What to Hand In</h2>
+
+Turn in a single zip file that contains:
+
+<ul>
+  <li> All of your python code (.py) and any notebook file (.ipynb)
+  </li><li> Figures 0-3
+</li></ul>
+
+
+<h2>Grading</h2>
+<ul>
+  <li> 30 pts: Clean, general code for model building (including
+       in-code documentation) 
+  </li><li> 10 pts: Figure 0
+  </li><li> 15 pts: Figure 1
+  </li><li> 15 pts: Figure 2
+  </li><li> 15 pts: Figure 3
+  </li><li> 15 pts: Convincing generated images (interesting textures and
+       no strange colors)
+  </li><li> 5 pts: Bonus if you can convincingly generate roads, buildings
+       or water features
+</li></ul>
+
+<h2>Hints</h2>
+<ul>
+  <li> I am not using a GPU except for some very small scale
+       experiments.  I have yet to get a GPU working for this on
+       Schooner.
+<p>
+  </p></li><li> 20 time steps is too small to give solid results (but there is
+       hope).  I am currently experimenting with 50.  The original
+       paper used 1000.  Remember that you need to adjust the beta
+       sequence when you change the number of steps.
+       <p>
+
+  </p></li><li> I am liking batch sizes in the range of 8 to 16 (the latter
+       gives more stable results), with steps-per-epoch in the range
+       of 16 to 32.
+       <p>
+       
+  </p></li><li> The provided code that produces the beta, alpha and sigma
+       schedules is free to use.  Beta and sigma increase linearly
+       with increasing time (alpha is computed automatically from beta).
+       Lots of people have different ideas
+       as to what these should look like.  For the code that I 
+       provided, a max beta of 0.2 is working well.
+       <p>
+  </p></li><li> Batch Normalization is critical.
+       <p>
+
+  </p></li><li> I am using an lrate of 10^-4 (so, go slow)
+   <p>
+
+  </p></li><li> WandB is useful again since we are performing individual
+       training runs.
+       <p>
+       
+  </p></li><li> I suggest starting small to get things working (small patch
+       sizes and small number of timesteps) and then moving
+       on to larger scales.<p> 
+
+       
+
+</p></li></ul>
+<p>
+
+</p><h2>Frequently Asked Questions</h2>
+
+<ul>
+  <li> None so far...       
+
+</li></ul>
+
+<p></p><hr><p>
+<em><a href="http://symbiotic-computing.org/fagg_html">andrewhfagg -- gmail.com</a></em></p><p>
+
+<font size="-2">
+<!-- hhmts start -->
+Last modified: Tue Apr 29 13:27:01 2025
+<!-- hhmts end -->
+</font>
+
+
+</p></body></html>
