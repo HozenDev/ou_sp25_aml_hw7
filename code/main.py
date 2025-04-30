@@ -150,8 +150,7 @@ def execute_exp(args, multi_gpus:int=1):
 
         with mirrored_strategy.scope():
             # Build network: you must provide your own implementation
-            model = create_cnn_classifier_network(
-                image_size=image_size,
+            model = create_diffusion_network(image_size=image_size,
                 nchannels=nchannels,
                 conv_layers=conv_layers,
                 dense_layers=dense_layers,
@@ -164,28 +163,25 @@ def execute_exp(args, multi_gpus:int=1):
                 metrics=[keras.metrics.SparseCategoricalAccuracy()],
                 padding=args.padding,
                 conv_activation=args.activation_conv,
-                dense_activation=args.activation_dense,
-                use_unet=True if "Deep" in args.label else False)
+                dense_activation=args.activation_dense)
             
     else:
         # Single GPU
         # Build network: you must provide your own implementation
-        model = create_cnn_classifier_network(
-                image_size=image_size,
-                nchannels=nchannels,
-                conv_layers=conv_layers,
-                dense_layers=dense_layers,
-                p_dropout=args.dropout,
-                p_spatial_dropout=args.spatial_dropout,
-                lambda_l2=args.L2_regularization,
-                lrate=args.lrate,
-                n_classes=n_classes,
-                loss=keras.losses.SparseCategoricalCrossentropy(),
-                metrics=[keras.metrics.SparseCategoricalAccuracy()],
-                padding=args.padding,
-                conv_activation=args.activation_conv,
-                dense_activation=args.activation_dense,
-                use_unet=True if "Deep" in args.label else False)
+        model = create_diffusion_network(image_size=image_size,
+                                         nchannels=nchannels,
+                                         conv_layers=conv_layers,
+                                         dense_layers=dense_layers,
+                                         p_dropout=args.dropout,
+                                         p_spatial_dropout=args.spatial_dropout,
+                                         lambda_l2=args.L2_regularization,
+                                         lrate=args.lrate,
+                                         n_classes=n_classes,
+                                         loss=keras.losses.SparseCategoricalCrossentropy(),
+                                         metrics=[keras.metrics.SparseCategoricalAccuracy()],
+                                         padding=args.padding,
+                                         conv_activation=args.activation_conv,
+                                         dense_activation=args.activation_dense)
     
     # Report model structure if verbosity is turned on
     if args.verbose >= 1:
