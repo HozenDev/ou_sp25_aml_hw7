@@ -110,14 +110,14 @@ def execute_exp(args, multi_gpus:int=1):
         base_dir=args.dataset,
         patch_size=args.image_size[0],
         fold=args.rotation,
-        filt=args.train_filt if hasattr(args, 'train_filt') else '*[012345678]',
+        filt='*[012345678]',
         cache_dir=args.cache,
         repeat=args.repeat,
         shuffle=args.shuffle,
         batch_size=args.batch,
         prefetch=args.prefetch,
         num_parallel_calls=args.num_parallel_calls,
-        time_sampling_exponent=args.time_sampling_exponent if hasattr(args, 'time_sampling_exponent') else 0.0
+        time_sampling_exponent=args.time_sampling_exponent
     )
 
     #################################
