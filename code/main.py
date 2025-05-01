@@ -176,7 +176,8 @@ def execute_exp(args, multi_gpus:int=1):
                 metrics = [keras.metrics.MeanAbsoluteError()],
                 padding=args.padding,
                 conv_activation=args.activation_conv,
-                dense_activation=args.activation_dense)
+                dense_activation=args.activation_dense,
+                nsteps=args.nsteps)
             
     else:
         # Single GPU
@@ -192,7 +193,8 @@ def execute_exp(args, multi_gpus:int=1):
                 metrics = [keras.metrics.MeanAbsoluteError()],
                 padding=args.padding,
                 conv_activation=args.activation_conv,
-                dense_activation=args.activation_dense)
+                dense_activation=args.activation_dense,
+                nsteps=args.nsteps)
     
     # Report model structure if verbosity is turned on
     if args.verbose >= 1:

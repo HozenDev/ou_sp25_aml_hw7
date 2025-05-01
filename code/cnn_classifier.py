@@ -24,6 +24,7 @@ def create_diffusion_network(image_size,
                              padding='same',
                              conv_activation='relu',
                              dense_activation='relu',
+                             nsteps=50,
                              time_embedding_dim=30):
     """
     U-Net based network for diffusion training as described in HW7
@@ -36,7 +37,7 @@ def create_diffusion_network(image_size,
     time_input = layers.Input(shape=(1,), dtype='int32', name='time_input')
 
     # Prepare time encoding
-    time_embed = PositionEncoder(output_dim=time_embedding_dim)(time_input)
+    time_embed = PositionEncoder(max_steps=nsteps, output_dim=time_embedding_dim)(time_input)
     time_embed = keras.ops.expand_dims(time_embed, axis=1)  # [batch, 1, embed]
     time_embed = keras.ops.expand_dims(time_embed, axis=1)  # [batch, 1, 1, embed]
     time_embed = keras.ops.tile(time_embed, [1, image_size[0], image_size[1], 1])  # [batch, H, W, embed]
