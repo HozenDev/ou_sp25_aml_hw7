@@ -130,6 +130,9 @@ def prediction_example_from_a_model(args, model, fold, timestamps, num_examples=
         except StopIteration:
             break
 
+        print(type(I))
+        print(I)
+
         # Cache these so they are consistent across time steps
         original_image = I[..., :3].numpy()
         t_tensor = tf.constant([0], dtype=tf.int32)  # dummy for init
