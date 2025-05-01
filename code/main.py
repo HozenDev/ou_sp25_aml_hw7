@@ -105,8 +105,6 @@ def execute_exp(args, multi_gpus:int=1):
         beta_end=0.02
     )
 
-    print("Args dataset: ", args.dataset)
-        
     ds_train, ds_valid = create_diffusion_dataset(
         alpha=alpha,
         base_dir=args.dataset,
