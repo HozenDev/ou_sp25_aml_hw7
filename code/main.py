@@ -100,7 +100,7 @@ def execute_exp(args, multi_gpus:int=1):
 
     # Compute alpha schedule for HW7 diffusion
     _, alpha, _ = compute_beta_alpha(
-        nsteps=args.nsteps if hasattr(args, 'nsteps') else 50,
+        nsteps=args.nsteps,
         beta_start=0.0001,
         beta_end=0.02
     )

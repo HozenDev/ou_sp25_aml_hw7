@@ -225,6 +225,7 @@ def create_single_dataset(base_dir: str = '/home/fagg/datasets/radiant_earth/pa'
         num_parallel_calls = tf.data.AUTOTUNE
 
     # Full list of files in the dataset
+    print('%s/%s/F%d/%s.npz' % (base_dir, partition, fold, filt))
     data = tf.data.Dataset.list_files('%s/%s/F%d/%s.npz' % (base_dir, partition, fold, filt), shuffle=True)
 
     # Load each file

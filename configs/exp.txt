@@ -1,7 +1,7 @@
 --dataset=/home/fagg/datasets/radiant_earth/pa
 --image_size
-64
-64
+256
+256
 26
 --padding=same
 --patience=100
