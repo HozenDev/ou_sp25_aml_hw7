@@ -24,6 +24,7 @@ CONFIG_DIR=configs
 ## SHALLOW
 python ${CODE_DIR}/main.py \
        @${CONFIG_DIR}/oscer.txt \
+       @${CONFIG_DIR}/exp.txt \
        @${CONFIG_DIR}/net.txt --label NET \
        --exp_index $SLURM_ARRAY_TASK_ID \
        --cpus_per_task $SLURM_CPUS_PER_TASK \
