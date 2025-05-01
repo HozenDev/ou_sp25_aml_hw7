@@ -132,9 +132,12 @@ def prediction_example_from_a_model(args, model, fold, timestamps, num_examples=
         except StopIteration:
             break
 
+        label_tensor = tf.cast(I['label_input'], tf.int32)
+        image_tensor = tf.cast(I['image_input'])
+        
         for t in range(nsteps):
             t_tensor = tf.constant([t], dtype=tf.int32)
-            label, _, noised_image, true_noise = create_diffusion_example(I['image_input'], I['label_input'], patch_size, alpha_tf, t_tensor)
+            label, _, noised_image, true_noise = create_diffusion_example(image_tensor, label_tensor, patch_size, alpha_tf, t_tensor)
 
             # Predict noise
             model_inputs = {
