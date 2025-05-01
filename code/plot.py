@@ -87,7 +87,7 @@ def load_results(results_dir):
 #             Plot Methods              #
 #########################################
 
-def prediction_example_from_a_model(args, model, fold, timestamps, num_examples=10, filename="predict_example.png"):
+def prediction_example_from_a_model(args, model, fold, timestamps, num_examples=3, filename="predict_example.png"):
     """
     Plots a few examples of predictions from a model.
 
@@ -99,18 +99,13 @@ def prediction_example_from_a_model(args, model, fold, timestamps, num_examples=
     """
 
     # Compute alpha schedule for HW7 diffusion
-    _, alpha, _ = compute_beta_alpha(
+    _, alpha_np, _ = compute_beta_alpha(
         nsteps=args.nsteps,
         beta_start=0.0001,
         beta_end=0.02
     )
 
-    alpha_tf = tf.constant(alpha, dtype=tf.float32)
-    t_index = tf.constant(timestamps, dtype=tf.int32)
-    patch_size = args.image_size[0]
-    
-
-    ds_train, ds_valid = create_diffusion_dataset(
+    _, dataset = create_diffusion_dataset(
         alpha=alpha,
         base_dir=args.dataset,
         patch_size=args.image_size[0],
@@ -124,40 +119,64 @@ def prediction_example_from_a_model(args, model, fold, timestamps, num_examples=
         time_sampling_exponent=args.time_sampling_exponent
     )
 
-    
-    
-    for I, L in ds_valid.take(1):
-        label, t, noised_image, true_noise = create_diffusion_example(I[..., :3], L, patch_size, alpha_tf, t_index)
-        
-        predicted_noise = model.predict({
-            'image_input': noised_image,
-            'label_input': label,
-            'time_input': t
-        }, verbose=0)[0]
+    alpha_tf = tf.constant(alpha_np, dtype=tf.float32)
+    patch_size = 256
 
-        # === Reconstruct denoised images ===
-        a_t = tf.gather(alpha_tf, t)[0]
-        sqrt_a = tf.sqrt(a_t)
-        sqrt_1_a = tf.sqrt(1 - a_t)
+    fig, axes = plt.subplots(args.nsteps + 1, num_examples, figsize=(4 * num_examples, 3 * (args.nsteps + 1)))
 
-        true_denoised = (noised_image - sqrt_1_a * true_noise) / sqrt_a
-        pred_denoised = (noised_image - sqrt_1_a * predicted_noise) / sqrt_a
+    for col in range(num_examples):
+        try:
+            I, L = next(iter(dataset))
+        except StopIteration:
+            break
 
-        images = {
-            "Original": convert_image(I[..., :3].numpy()),
-            f"Noised (t={t.numpy()[0]})": convert_image(noised_image.numpy()),
-            "Denoised (True)": convert_image(true_denoised.numpy()),
-            "Denoised (Pred)": convert_image(pred_denoised.numpy())
-        }
+        # Cache these so they are consistent across time steps
+        original_image = I[..., :3].numpy()
+        t_tensor = tf.constant([0], dtype=tf.int32)  # dummy for init
+        label, _, _, _ = create_diffusion_example(I[..., :3], L, patch_size, alpha_tf, t_tensor)
 
-        plt.figure(figsize=(16, 4))
-        for i, (title, img) in enumerate(images.items()):
-            plt.subplot(1, 4, i + 1)
-            plt.imshow(img)
-            plt.title(title)
-            plt.axis('off')
-        plt.tight_layout()
-    
+        for t in range(args.nsteps):
+            t_tensor = tf.constant([t], dtype=tf.int32)
+            _, _, noised_image, true_noise = create_diffusion_example(I[..., :3], L, patch_size, alpha_tf, t_tensor)
+
+            # Predict noise
+            model_inputs = {
+                'label_input': tf.expand_dims(label, axis=0),
+                'image_input': tf.expand_dims(noised_image, axis=0),
+                'time_input': tf.expand_dims(t_tensor, axis=0)
+            }
+            predicted_noise = model.predict(model_inputs, verbose=0)[0]
+
+            a_t = tf.gather(alpha_tf, t_tensor)[0]
+            sqrt_a = tf.sqrt(a_t)
+            sqrt_1_a = tf.sqrt(1 - a_t)
+
+            # Denoise prediction
+            pred_denoised = (noised_image - sqrt_1_a * predicted_noise) / sqrt_a
+            pred_denoised = convert_image(pred_denoised.numpy())
+
+            ax = axes[t, col] if num_examples > 1 else axes[t]
+            ax.imshow(pred_denoised)
+            if col == 0:
+                ax.set_ylabel(f"Step {t}", fontsize=10)
+            ax.axis('off')
+
+        # At the end: show true denoised
+        t_final = tf.constant([args.nsteps - 1], dtype=tf.int32)
+        _, _, noised_image_final, true_noise_final = create_diffusion_example(I[..., :3], L, patch_size, alpha_tf, t_final)
+        a_final = tf.gather(alpha_tf, t_final)[0]
+        sqrt_a_final = tf.sqrt(a_final)
+        sqrt_1_a_final = tf.sqrt(1 - a_final)
+        true_denoised = (noised_image_final - sqrt_1_a_final * true_noise_final) / sqrt_a_final
+        true_denoised = convert_image(true_denoised.numpy())
+
+        ax = axes[-1, col] if num_examples > 1 else axes[-1]
+        ax.imshow(true_denoised)
+        if col == 0:
+            ax.set_ylabel("True", fontsize=12)
+        ax.axis('off')
+
+    plt.tight_layout()
     plt.savefig(filename)
 
 def generate_figure2(model, alpha, sigma, patch_size=256, nsteps=50, seed=None, save_path='figure2.png'):
