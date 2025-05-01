@@ -119,10 +119,12 @@ def prediction_example_from_a_model(args, model, fold, timestamps, num_examples=
         time_sampling_exponent=args.time_sampling_exponent
     )
 
+    nsteps = args.nsteps
+
     alpha_tf = tf.constant(alpha_np, dtype=tf.float32)
     patch_size = 256
 
-    fig, axes = plt.subplots(args.nsteps + 1, num_examples, figsize=(4 * num_examples, 3 * (args.nsteps + 1)))
+    fig, axes = plt.subplots(nsteps + 1, num_examples, figsize=(4 * num_examples, 3 * (nsteps + 1)))
 
     for col in range(num_examples):
         try:
@@ -130,17 +132,9 @@ def prediction_example_from_a_model(args, model, fold, timestamps, num_examples=
         except StopIteration:
             break
 
-        print(type(I))
-        print(I)
-
-        # Cache these so they are consistent across time steps
-        original_image = I[..., :3].numpy()
-        t_tensor = tf.constant([0], dtype=tf.int32)  # dummy for init
-        label, _, _, _ = create_diffusion_example(I[..., :3], L, patch_size, alpha_tf, t_tensor)
-
-        for t in range(args.nsteps):
+        for t in range(nsteps):
             t_tensor = tf.constant([t], dtype=tf.int32)
-            _, _, noised_image, true_noise = create_diffusion_example(I[..., :3], L, patch_size, alpha_tf, t_tensor)
+            label, _, noised_image, true_noise = create_diffusion_example(I[..., :3], L, patch_size, alpha_tf, t_tensor)
 
             # Predict noise
             model_inputs = {
@@ -165,7 +159,7 @@ def prediction_example_from_a_model(args, model, fold, timestamps, num_examples=
             ax.axis('off')
 
         # At the end: show true denoised
-        t_final = tf.constant([args.nsteps - 1], dtype=tf.int32)
+        t_final = tf.constant([nsteps - 1], dtype=tf.int32)
         _, _, noised_image_final, true_noise_final = create_diffusion_example(I[..., :3], L, patch_size, alpha_tf, t_final)
         a_final = tf.gather(alpha_tf, t_final)[0]
         sqrt_a_final = tf.sqrt(a_final)
