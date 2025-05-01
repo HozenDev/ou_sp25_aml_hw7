@@ -87,7 +87,7 @@ def load_results(results_dir):
 #             Plot Methods              #
 #########################################
 
-def prediction_example_from_a_model(args, model, fold, num_examples=10, filename="predict_example.png"):
+def prediction_example_from_a_model(args, model, fold, timestamps, num_examples=10, filename="predict_example.png"):
     """
     Plots a few examples of predictions from a model.
 
@@ -106,7 +106,7 @@ def prediction_example_from_a_model(args, model, fold, num_examples=10, filename
     )
 
     alpha_tf = tf.constant(alpha, dtype=tf.float32)
-    t_index = tf.constant(args.nsteps - 1, dtype=tf.int32)
+    t_index = tf.constant(timestamps, dtype=tf.int32)
     patch_size = args.image_size[0]
     
 
@@ -127,8 +127,6 @@ def prediction_example_from_a_model(args, model, fold, num_examples=10, filename
     
     
     for I, L in ds_valid.take(1):
-        print(I.shape, L.shape) # Debug
-
         label, t, noised_image, true_noise = create_diffusion_example(I[..., :3], L, patch_size, alpha_tf, t_index)
         
         predicted_noise = model.predict({
@@ -296,7 +294,7 @@ if __name__ == "__main__":
     )
 
     # Example of prediction from a model
-    prediction_example_from_a_model(args, models[0], 0, num_examples=2, filename="figure_2.png")
+    prediction_example_from_a_model(args, models[0], 0, timestamps=10, num_examples=2, filename="figure_2.png")
 
     # generate_figure2(models[0], alpha, sigma, patch_size=256, nsteps=50, seed=None, save_path='figure2.png')
 
