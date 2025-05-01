@@ -6,12 +6,12 @@
 #SBATCH --mem=80G
 #SBATCH --output=results/exp/%j_stdout.txt
 #SBATCH --error=results/exp/%j_stderr.txt
-#SBATCH --time=03:00:00
+#SBATCH --time=05:00:00
 #SBATCH --job-name=exp
 #SBATCH --mail-user=Enzo.B.Durel-1@ou.edu
 #SBATCH --mail-type=ALL
 #SBATCH --chdir=/home/cs504305/hw7
-#SBATCH --array=0-4
+#SBATCH --array=1-4
 
 #################################################
 # Do not change this line unless you have your own python/tensorflow/keras set up

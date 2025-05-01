@@ -6,11 +6,10 @@
 --padding=same
 --patience=100
 --batch=8
---shuffle=100
 --min_delta=0.01
 --no_use_py_func
 --project=HW7
---epochs=500
+--epochs=200
 --steps_per_epoch=100
 --time_sampling_exponent=0.5
 --nsteps=50
