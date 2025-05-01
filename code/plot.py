@@ -6,7 +6,8 @@ Author: Enzo B. Durel (enzo.durel@gmail.com)
 Plotting script to analyse models results and performances.
 """
 
-from chesapeake_loader4 import create_single_dataset
+from chesapeake_loader4 import create_diffusion_dataset, create_single_dataset, create_diffusion_example
+from diffusion_tools import compute_beta_alpha, convert_image
 import tensorflow as tf
 
 # Gpus initialization
@@ -97,147 +98,163 @@ def prediction_example_from_a_model(args, model, fold, num_examples=10, filename
     :params filename: Filename to save the plot
     """
 
-    # Use of single dataset to avoid loading other datasets
-    test_ds = create_single_dataset(base_dir=args.dataset,
-                                    full_sat=True,
-                                    patch_size=None,
-                                    partition='valid',
-                                    fold=fold,
-                                    filt='*',
-                                    cache_path='',
-                                    repeat=False,
-                                    shuffle=None,
-                                    batch_size=args.batch,
-                                    prefetch=args.prefetch,
-                                    num_parallel_calls=args.num_parallel_calls)
+    # Compute alpha schedule for HW7 diffusion
+    _, alpha, _ = compute_beta_alpha(
+        nsteps=args.nsteps,
+        beta_start=0.0001,
+        beta_end=0.02
+    )
 
-    for batch in test_ds.take(1):
-        inputs, true_labels = batch
+    alpha_tf = tf.constant(alpha, dtype=tf.float32)
+    t_index = tf.constant(args.nsteps - 1, dtype=tf.int32)
+    patch_size = args.image_size[0]
+    
 
-        preds = model.predict(inputs)
-        pred_labels = np.argmax(preds, axis=-1) # Get the class with the high prob
+    ds_train, ds_valid = create_diffusion_dataset(
+        alpha=alpha,
+        base_dir=args.dataset,
+        patch_size=args.image_size[0],
+        fold=fold,
+        filt='*[012345678]',
+        cache_dir=args.cache,
+        repeat=True,
+        batch_size=args.batch,
+        prefetch=args.prefetch,
+        num_parallel_calls=args.num_parallel_calls,
+        time_sampling_exponent=args.time_sampling_exponent
+    )
 
-        _, axes = plt.subplots(num_examples, 3, figsize=(10, num_examples * 3))
-        for i in range(num_examples):
-            rgb = inputs[i, :, :, :3].numpy() # Raw image
-            gt = true_labels[i].numpy() # Good semantic labelled image
-            pred = pred_labels[i] # Predict image
+    
+    
+    for I, L in ds_valid.take(1):
+        print(I.shape, L.shape) # Debug
 
-            axes[i, 0].imshow(rgb)
-            axes[i, 0].set_title("Input RGB")
-            axes[i, 0].axis('off')
+        label, t, noised_image, true_noise = create_diffusion_example(I[..., :3], L, patch_size, alpha_tf, t_index)
+        
+        predicted_noise = model.predict({
+            'image_input': noised_image,
+            'label_input': label,
+            'time_input': t
+        }, verbose=0)[0]
 
-            axes[i, 1].imshow(gt, vmin=0, vmax=6)
-            axes[i, 1].set_title("Ground Truth")
-            axes[i, 1].axis('off')
+        # === Reconstruct denoised images ===
+        a_t = tf.gather(alpha_tf, t)[0]
+        sqrt_a = tf.sqrt(a_t)
+        sqrt_1_a = tf.sqrt(1 - a_t)
 
-            axes[i, 2].imshow(pred, vmin=0, vmax=6)
-            axes[i, 2].set_title("Prediction")
-            axes[i, 2].axis('off')
+        true_denoised = (noised_image - sqrt_1_a * true_noise) / sqrt_a
+        pred_denoised = (noised_image - sqrt_1_a * predicted_noise) / sqrt_a
+
+        images = {
+            "Original": convert_image(I[..., :3].numpy()),
+            f"Noised (t={t.numpy()[0]})": convert_image(noised_image.numpy()),
+            "Denoised (True)": convert_image(true_denoised.numpy()),
+            "Denoised (Pred)": convert_image(pred_denoised.numpy())
+        }
+
+        plt.figure(figsize=(16, 4))
+        for i, (title, img) in enumerate(images.items()):
+            plt.subplot(1, 4, i + 1)
+            plt.imshow(img)
+            plt.title(title)
+            plt.axis('off')
+        plt.tight_layout()
+    
+    plt.savefig(filename)
+
+def generate_figure2(model, alpha, sigma, patch_size=256, nsteps=50, seed=None, save_path='figure2.png'):
+    """
+    Generate and plot one sample diffusion sequence (Figure 2) using the trained model.
+    
+    Args:
+        model: Trained Keras diffusion model.
+        alpha: np.array of accumulated alpha values (length = nsteps).
+        sigma: np.array of sigma values (length = nsteps).
+        label_path: Path to a .npz file to extract image/label for conditioning.
+        patch_size: Size of image patches.
+        nsteps: Number of diffusion steps.
+        seed: Optional seed for reproducibility.
+        save_path: Where to save the resulting figure.
+    """
+
+    if seed is not None:
+        tf.random.set_seed(seed)
+        np.random.seed(seed)
+
+    # Load one image-label pair using the provided loader
+    ds_train, ds = create_diffusion_dataset(
+        alpha=alpha,
+        base_dir=args.dataset,
+        patch_size=args.image_size[0],
+        fold=0,
+        filt='*[012345678]',
+        cache_dir=args.cache,
+        repeat=True,
+        batch_size=args.batch,
+        prefetch=args.prefetch,
+        num_parallel_calls=args.num_parallel_calls,
+        time_sampling_exponent=args.time_sampling_exponent
+    )
+    
+    I = None
+    L = None
+    for I, L in ds.take(1):
+        break
+
+    # Use one-hot semantic label and normalize image to +/-1
+    L_oh = tf.one_hot(L, 7)
+    I = I[..., :3]  # RGB only
+    I = tf.cast(I, tf.float32)
+    L_oh = tf.cast(L_oh, tf.float32)
+
+    # Start from pure noise
+    current = tf.random.normal(shape=(1, patch_size, patch_size, 3))
+
+    frames = []
+
+    for t in reversed(range(nsteps)):
+        t_tensor = tf.constant([[t]], dtype=tf.int32)
+
+        # Predict noise to remove
+        model_input = {
+            'label_input': tf.expand_dims(L_oh, 0),
+            'time_input': t_tensor,
+            'image_input': current
+        }
+        predicted_noise = model(model_input)
+
+        # Update current image using Equation 18.5-like logic
+        a_t = alpha[t]
+        b_t = 1 - a_t
+        s_t = sigma[t]
+
+        current = (1 / np.sqrt(1 - b_t)) * (current - ((1 - a_t) / np.sqrt(a_t)) * predicted_noise)
+
+        if t > 0:
+            current += s_t * tf.random.normal(shape=current.shape)
+
+        # Store current step for plotting
+        image_np = convert_image(current[0].numpy())  # shape: HWC
+        frames.append(image_np)
+
+    # === PLOT ===
+    ncols = 5
+    nrows = int(np.ceil(len(frames) / ncols))
+    fig, axes = plt.subplots(nrows, ncols, figsize=(15, 3 * nrows))
+    axes = axes.flat
+
+    for idx in range(nrows * ncols):
+        ax = axes[idx]
+        if idx < len(frames):
+            ax.imshow(frames[idx])
+            ax.set_title(f"Step {nsteps - 1 - idx}")
+        ax.axis('off')
 
     plt.tight_layout()
-    plt.savefig(filename)
-    
+    plt.savefig(save_path)
+    plt.show()
 
-def plot_combined_confusion_matrix(args, models, num_classes, class_names, title="Confusion Matrix", filename="figure_4.png"):
-    """
-    Computes and plots a combined confusion matrix from multiple model rotations.
-
-    :params args: Command-line arguments
-    :params models: List of trained models
-    :params num_classes: Number of classes
-    :params class_names: List of class names
-    :params title: Title of the plot
-    :params filename: Filename to save the plot
-    """
-    all_y_true = []
-    all_y_pred = []
-
-    for i, model in enumerate(models):
-
-        test_ds = create_single_dataset(base_dir=args.dataset,
-                                        full_sat=True,
-                                        patch_size=None,
-                                        partition='valid',
-                                        fold=i,
-                                        filt='*',
-                                        cache_path='',
-                                        repeat=False,
-                                        shuffle=None,
-                                        batch_size=args.batch,
-                                        prefetch=args.prefetch,
-                                        num_parallel_calls=args.num_parallel_calls)
-        
-        for x_batch, y_batch in test_ds:
-            preds = model.predict(x_batch)
-            y_pred = np.argmax(preds, axis=-1)  
-            y_true = y_batch.numpy()            
-
-            all_y_pred.append(y_pred.flatten())
-            all_y_true.append(y_true.flatten())
-            
-    y_true_flat = np.concatenate(all_y_true)
-    y_pred_flat = np.concatenate(all_y_pred)
-
-    labels = list(range(num_classes))
-    cm = confusion_matrix(y_true_flat, y_pred_flat, labels=labels)
-
-    _, ax = plt.subplots(figsize=(8, 6))
-    im = ax.imshow(cm, cmap="Blues")
-
-    plt.title(title)
-    plt.xlabel("Predicted Label")
-    plt.ylabel("True Label")
-    plt.colorbar(im, ax=ax)
-    plt.xticks(np.arange(num_classes), class_names, rotation=45)
-    plt.yticks(np.arange(num_classes), class_names)
-
-    for i in range(num_classes):
-        for j in range(num_classes):
-            ax.text(j, i, f"{cm[i, j]:,}", ha="center", va="center", color="black")
-
-    plt.tight_layout()
-    plt.savefig(filename)
-
-
-def plot_test_accuracy_scatter(shallow_results_dir, deep_results_dir, filename="test_acc.png"):
-    """
-    Plots a scatter plot comparing test accuracies of shallow and deep models.
-
-    :params shallow_results_dir: Directory containing shallow model results
-    :params deep_results_dir: Directory containing deep model results
-    :params filename: Filename to save the plot
-    """
-    # shallow_accuracies, deep_accuracies = [], []
-    # rotations = list(range(min(len(shallow_results), len(deep_results))))
-    rotations = list(range(5))
-    
-    # Define color map: distinct color for each rotation
-    colors = plt.cm.get_cmap("tab10", len(rotations))
-    
-    shallow_results_iter = load_results_iter(shallow_results_dir)
-    deep_results_iter = load_results_iter(deep_results_dir)
-    
-    # Scatter plot
-    plt.figure(figsize=(7,7))
-    for i in range(len(rotations)):
-
-        shallow_accuracy = next(shallow_results_iter)["predict_testing_eval"][1]
-        deep_accuracy = next(deep_results_iter)["predict_testing_eval"][1]
-        
-        plt.scatter(shallow_accuracy, deep_accuracy, color=colors(i), label=f"Rot {rotations[i]}")
-        plt.text(shallow_accuracy, deep_accuracy, f"{rotations[i]}", fontsize=10, ha='right', va='bottom')
-
-    # Diagonal line    
-    plt.plot([0.85, 0.96], [0.85, 0.96], 'k--', lw=2)  # y = x line
-
-    plt.xlabel("Shallow Model Accuracy")
-    plt.ylabel("Deep Model Accuracy")
-    plt.title("Test Accuracy: Deep vs. Shallow")
-    plt.legend()
-    plt.grid(True)
-    plt.savefig(filename)
-
+    return frames
 
 #########################################
 #            Main Function              #
@@ -253,41 +270,34 @@ if __name__ == "__main__":
     nb_rotation = 5
     num_classes = 7
     class_names = ["No Class", "Water", "Forest", "Low Veg", "Barren", "Impervious", "Road"]
-    deep_dir = "./models/deep_1/"
-    shallow_dir = "./models/shallow_1/"
+    net_dir = "./models/net_1/"
 
     #######################
     #     Load Models     #
     #######################
     
-    shallow_models = []
-    deep_models = []
+    models = []
 
     for i in range(nb_rotation):
         try:
-            shallow_model = load_trained_model(shallow_dir, f"rot_0{i}")
-            shallow_models.append(shallow_model)
+            model = load_trained_model(net_dir, f"rot_0{i}")
+            models.append(model)
         except Exception as e:
             print(f"Error loading shallow model: {e}")
-        
-        try:
-            deep_model = load_trained_model(deep_dir, f"rot_0{i}")
-            deep_models.append(deep_model)
-        except Exception as e:
-            print(f"Error loading deep model: {e}")
 
     #######################
     #       Plotting      #
     #######################
-            
+
+    _, alpha, sigma = compute_beta_alpha(
+        nsteps=args.nsteps,
+        beta_start=0.0001,
+        beta_end=0.02
+    )
+
     # Example of prediction from a model
-    prediction_example_from_a_model(args, deep_models[2], 2, num_examples=10, filename="figure_5b.png")
-    prediction_example_from_a_model(args, shallow_models[0], 0, num_examples=10, filename="figure_5a.png")
+    prediction_example_from_a_model(args, models[0], 0, num_examples=2, filename="figure_2.png")
 
-    # Confusion matrix
-    plot_combined_confusion_matrix(args=args, models=shallow_models, class_names=class_names, title="Shallow Model Confusion Matrix", filename="figure_3a.png", num_classes=num_classes)
-    plot_combined_confusion_matrix(args=args, models=deep_models, class_names=class_names, title="Deep Model Confusion Matrix", filename="figure_3b.png", num_classes=num_classes)
+    # generate_figure2(models[0], alpha, sigma, patch_size=256, nsteps=50, seed=None, save_path='figure2.png')
 
-    # Test accuracy scatter plot
-    plot_test_accuracy_scatter(shallow_dir, deep_dir, filename="figure_4.png")
 
