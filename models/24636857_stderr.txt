@@ -1,0 +1,47 @@
+2025-05-01 03:11:07.354859: E external/local_xla/xla/stream_executor/cuda/cuda_dnn.cc:10575] Unable to register cuDNN factory: Attempting to register factory for plugin cuDNN when one has already been registered
+2025-05-01 03:11:07.355166: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:479] Unable to register cuFFT factory: Attempting to register factory for plugin cuFFT when one has already been registered
+2025-05-01 03:11:07.356711: E external/local_xla/xla/stream_executor/cuda/cuda_blas.cc:1442] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered
+2025-05-01 03:11:07.363170: I tensorflow/core/platform/cpu_feature_guard.cc:210] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
+To enable the following instructions: SSE4.1 SSE4.2 AVX AVX2 FMA, in other operations, rebuild TensorFlow with the appropriate compiler flags.
+2025-05-01 03:11:35.338205: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1928] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 38367 MB memory:  -> device: 0, name: NVIDIA A100-PCIE-40GB, pci bus id: 0000:e2:00.0, compute capability: 8.0
+wandb: Currently logged in as: dure0010 (dure0010-university-of-oklahoma). Use `wandb login --relogin` to force relogin
+wandb: Using wandb-core as the SDK backend.  Please refer to https://wandb.me/wandb-core for more information.
+wandb: Tracking run with wandb version 0.19.2
+wandb: Run data is saved locally in /home/cs504305/hw7/wandb/run-20250501_031146-a4ikf90n
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run NET_R4
+wandb: ⭐️ View project at https://wandb.ai/dure0010-university-of-oklahoma/HW7
+wandb: 🚀 View run at https://wandb.ai/dure0010-university-of-oklahoma/HW7/runs/a4ikf90n
+2025-05-01 03:11:53.692315: I tensorflow/compiler/mlir/tensorflow/utils/dump_mlir_util.cc:268] disabling MLIR crash reproducer, set env var `MLIR_CRASH_REPRODUCER_DIRECTORY` to enable.
+2025-05-01 03:11:54.427012: I external/local_xla/xla/stream_executor/cuda/cuda_dnn.cc:465] Loaded cuDNN version 8907
+2025-05-01 03:12:03.690369: W external/local_tsl/tsl/framework/bfc_allocator.cc:368] Garbage collection: deallocate free memory regions (i.e., allocations) so that we can re-allocate a larger region to avoid OOM due to memory fragmentation. If you see this message frequently, you are running near the threshold of the available device memory and re-allocation may incur great performance overhead. You may try smaller batch sizes to observe the performance impact. Set TF_ENABLE_GPU_GARBAGE_COLLECTION=false if you'd like to disable this feature.
+2025-05-01 03:12:04.690448: E external/local_xla/xla/service/slow_operation_alarm.cc:65] Trying algorithm eng12{k11=0} for conv (f32[8,128,128,128]{3,2,1,0}, u8[0]{0}) custom-call(f32[8,421,128,128]{3,2,1,0}, f32[128,421,3,3]{3,2,1,0}, f32[128]{0}), window={size=3x3 pad=1_1x1_1}, dim_labels=bf01_oi01->bf01, custom_call_target="__cudnn$convBiasActivationForward", backend_config={"operation_queue_id":"0","wait_on_operation_queues":[],"cudnn_conv_backend_config":{"activation_mode":"kRelu","conv_result_scale":1,"side_input_scale":0,"leakyrelu_alpha":0}} is taking a while...
+2025-05-01 03:12:05.297701: E external/local_xla/xla/service/slow_operation_alarm.cc:133] The operation took 1.6073344s
+Trying algorithm eng12{k11=0} for conv (f32[8,128,128,128]{3,2,1,0}, u8[0]{0}) custom-call(f32[8,421,128,128]{3,2,1,0}, f32[128,421,3,3]{3,2,1,0}, f32[128]{0}), window={size=3x3 pad=1_1x1_1}, dim_labels=bf01_oi01->bf01, custom_call_target="__cudnn$convBiasActivationForward", backend_config={"operation_queue_id":"0","wait_on_operation_queues":[],"cudnn_conv_backend_config":{"activation_mode":"kRelu","conv_result_scale":1,"side_input_scale":0,"leakyrelu_alpha":0}} is taking a while...
+wandb:                                                                                
+wandb: 
+wandb: Run history:
+wandb:                   epoch/epoch ▁▁▁▁▁▂▂▂▂▂▂▂▃▃▃▃▃▃▃▄▄▄▅▅▅▆▆▆▆▇▇▇▇▇▇▇████
+wandb:           epoch/learning_rate ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+wandb:                    epoch/loss █▆▅▄▄▄▄▄▃▃▃▃▂▂▂▂▂▂▂▂▂▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+wandb:     epoch/mean_absolute_error █▅▄▄▄▄▄▃▃▃▃▃▂▂▂▂▂▂▁▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+wandb:                epoch/val_loss █▆▄▃▃▂▂▂▂▂▂▂▂▂▂▂▂▁▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+wandb: epoch/val_mean_absolute_error █▅▄▄▄▂▂▂▂▂▂▂▂▂▂▂▂▁▂▁▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+wandb:                final_val_loss ▁
+wandb:                 final_val_mae ▁
+wandb: 
+wandb: Run summary:
+wandb:                   epoch/epoch 199
+wandb:           epoch/learning_rate 0.0001
+wandb:                    epoch/loss 0.19772
+wandb:     epoch/mean_absolute_error 0.31006
+wandb:                epoch/val_loss 0.1804
+wandb: epoch/val_mean_absolute_error 0.27786
+wandb:                final_val_loss 0.18141
+wandb:                 final_val_mae 0.27953
+wandb:                      hostname c908.oscer.ou.edu
+wandb: 
+wandb: 🚀 View run NET_R4 at: https://wandb.ai/dure0010-university-of-oklahoma/HW7/runs/a4ikf90n
+wandb: ⭐️ View project at: https://wandb.ai/dure0010-university-of-oklahoma/HW7
+wandb: Synced 5 W&B file(s), 1 media file(s), 0 artifact file(s) and 0 other file(s)
+wandb: Find logs at: ./wandb/run-20250501_031146-a4ikf90n/logs
