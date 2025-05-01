@@ -284,11 +284,11 @@ def execute_exp(args, multi_gpus:int=1):
     # Training set
     print('#################')
     print('Training')
-    results_predict_training_eval = model.evaluate(ds_train)
+    # results_predict_training_eval = model.evaluate(ds_train)
     # results['predict_training'] = model.predict(ds_train)
     # results['predict_training_eval'] = model.evaluate(ds_train)
-    wandb.log({'final_train_loss': results_predict_training_eval[0]})
-    wandb.log({'final_train_mae': results_predict_training_eval[1]})
+    # wandb.log({'final_train_loss': results_predict_training_eval[0]})
+    # wandb.log({'final_train_mae': results_predict_training_eval[1]})
 
     # History
     # results['history'] = history.history
