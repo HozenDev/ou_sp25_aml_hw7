@@ -225,6 +225,8 @@ def create_single_dataset(base_dir: str = '/home/fagg/datasets/radiant_earth/pa'
         num_parallel_calls = tf.data.AUTOTUNE
 
     # Full list of files in the dataset
+    print("Base dir single: ", base_dir)
+    print("Partition: ", partition)
     print('%s/%s/F%d/%s.npz' % (base_dir, partition, fold, filt))
     data = tf.data.Dataset.list_files('%s/%s/F%d/%s.npz' % (base_dir, partition, fold, filt), shuffle=True)
 
@@ -444,6 +446,10 @@ def create_diffusion_dataset(alpha:np.array,
 
     '''
 
+    print("Base dir: ", base_dir)
+    print("Fold: ", fold)
+    print("Filter: ", filt)
+    
     # Base dataset: tuples of individual I/L pairs
     ds = create_single_dataset(base_dir=base_dir,
                                full_sat=False,
