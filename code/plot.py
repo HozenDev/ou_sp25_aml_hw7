@@ -133,7 +133,7 @@ def prediction_example_from_a_model(args, model, fold, timestamps, num_examples=
             break
 
         label_tensor = tf.cast(I['label_input'], tf.int32)
-        image_tensor = tf.cast(I['image_input'])
+        image_tensor = I['image_input']
         
         for t in range(nsteps):
             t_tensor = tf.constant([t], dtype=tf.int32)
