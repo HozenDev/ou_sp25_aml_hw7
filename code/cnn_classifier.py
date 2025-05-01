@@ -2,6 +2,7 @@ import keras
 from keras import layers, models, regularizers
 from diffusion_tools import PositionEncoder
 
+import tensorflow as tf
 
 def conv_block(x, filters, kernel_size, activation, padding, reg, batch_norm, spatial_dropout=None):
     x = layers.Conv2D(filters, kernel_size, padding=padding, activation=activation, kernel_regularizer=reg)(x)
@@ -71,8 +72,9 @@ def create_diffusion_network(image_size,
             x = layers.UpSampling2D(size=layer['pool_size'])(x)
         if i < len(skip_connections):
             skip = skip_connections[i]
-            label_down = layers.AveragePooling2D(pool_size=2**(len(conv_layers) - i))(label_input)
-            time_down = layers.AveragePooling2D(pool_size=2**(len(conv_layers) - i))(time_embed)
+            # Resize label and time embeddings to match x
+            label_down = tf.image.resize(label_input, size=tf.shape(x)[1:3], method='nearest')
+            time_down = tf.image.resize(time_embed, size=tf.shape(x)[1:3], method='nearest')
             x = layers.Concatenate()([x, skip, label_down, time_down])
         x = conv_block(x, filters=layer['filters'], kernel_size=layer['kernel_size'],
                        activation=conv_activation, padding=padding, reg=reg,
