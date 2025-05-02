@@ -139,15 +139,14 @@ def prediction_example_from_a_model(args, model, fold, timestamps, num_examples=
         
         for t in range(nsteps):
             t_tensor = tf.constant([t], dtype=tf.int32)
-            label, time_input, noised_image, _ = create_diffusion_example(image_tensor, label_tensor, patch_size, alpha_tf, t_tensor)
-
-            print(f"t: {t}, label shape: {label.shape}, time_input shape: {time_input.shape}, noised_image shape: {noised_image.shape}")
+            _, _, noised_image, _ = create_diffusion_example(image_tensor, label_tensor, patch_size, alpha_tf, t_tensor)
+            t_tensor = t * np.ones(shape=(I.shape[0], 1))
 
             # Predict noise
             model_inputs = {
-                'label_input': label,
+                'label_input': label_tensor,
                 'image_input': noised_image, 
-                'time_input': time_input,
+                'time_input': t_tensor,
             }
 
             for k, v in model_inputs.items():
