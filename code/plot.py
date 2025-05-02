@@ -178,7 +178,7 @@ def prediction_example_from_a_model(args, model, fold, timestamps, num_examples=
         true_denoised = convert_image(true_denoised.numpy())
 
         ax = axes[-1, col] if num_examples > 1 else axes[-1]
-        ax.imshow(true_denoised)
+        ax.imshow(true_denoised[col,:,:,:])
         if col == 0:
             ax.set_ylabel("True", fontsize=12)
         ax.axis('off')
