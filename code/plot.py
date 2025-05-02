@@ -141,9 +141,9 @@ def prediction_example_from_a_model(args, model, fold, timestamps, num_examples=
 
             # Predict noise
             model_inputs = {
-                'label_input': tf.expand_dims(label, axis=0),
-                'image_input': tf.expand_dims(noised_image, axis=0),
-                'time_input': tf.expand_dims(t_tensor, axis=0)
+                'label_input': label,
+                'image_input': noised_image, 
+                'time_input': t_tensor,
             }
 
             for k, v in model_inputs.items():
