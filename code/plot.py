@@ -145,6 +145,10 @@ def prediction_example_from_a_model(args, model, fold, timestamps, num_examples=
                 'image_input': tf.expand_dims(noised_image, axis=0),
                 'time_input': tf.expand_dims(t_tensor, axis=0)
             }
+
+            for k, v in model_inputs.items():
+                print("Model input shapes:", k, v.shape)
+            
             predicted_noise = model.predict(model_inputs, verbose=0)[0]
 
             a_t = tf.gather(alpha_tf, t_tensor)[0]
