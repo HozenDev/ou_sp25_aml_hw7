@@ -159,6 +159,9 @@ def predict_example(args, model):
         axs[j//cols+1, j%cols].set_xticks([])
         axs[j//cols+1, j%cols].set_yticks([])
 
+    plt.tight_layout()
+    plt.savefig("figures/figure_2.png")
+
 def prediction_example_from_a_model(args, model, fold, timestamps, num_examples=3, filename="predict_example.png"):
     """
     Plots a few examples of predictions from a model.
