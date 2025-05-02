@@ -128,15 +128,17 @@ def prediction_example_from_a_model(args, model, fold, timestamps, num_examples=
 
     for col in range(num_examples):
         try:
-            I, L = next(iter(dataset))
+            I, L = next(dataset.as_numpy_iterator())
         except StopIteration:
             break
 
-        label_tensor = tf.cast(I['label_input'], tf.int32)
+        label_tensor = I['label_input']
+        time_tensor = I['time_input']
         image_tensor = I['image_input']
+        noise = L;
         
         for t in range(nsteps):
-            t_tensor = tf.constant([t], dtype=tf.int32)
+            t_tensor = t * np.ones(shape=(I['image_input'].shape[0], 1))
             label, _, noised_image, true_noise = create_diffusion_example(image_tensor, label_tensor, patch_size, alpha_tf, t_tensor)
 
             # Predict noise
@@ -149,7 +151,7 @@ def prediction_example_from_a_model(args, model, fold, timestamps, num_examples=
             for k, v in model_inputs.items():
                 print("Model input shapes:", k, v.shape)
             
-            predicted_noise = model.predict(model_inputs, verbose=0)[0]
+            predicted_noise = model.predict(x=model_inputs, verbose=0)[0]
 
             a_t = tf.gather(alpha_tf, t_tensor)[0]
             sqrt_a = tf.sqrt(a_t)
