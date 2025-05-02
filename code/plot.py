@@ -7,7 +7,7 @@ Plotting script to analyse models results and performances.
 """
 
 from chesapeake_loader4 import create_diffusion_dataset, create_single_dataset, create_diffusion_example
-from diffusion_tools import compute_beta_alpha, convert_image
+from diffusion_tools import compute_beta_alpha, convert_image, compute_beta_alpha2
 import tensorflow as tf
 
 # Gpus initialization
@@ -87,6 +87,78 @@ def load_results(results_dir):
 #             Plot Methods              #
 #########################################
 
+def predict_example(args, model):
+
+    # Sampling data set
+    ds = create_single_dataset(base_dir=args.dataset, 
+                         full_sat=False,
+                         partition='valid',
+                         patch_size=256, 
+                         fold=0,
+                         cache_path=None, 
+                         repeat=True, 
+                         batch_size=args.batch, 
+                         prefetch=2, 
+                         num_parallel_calls=4)
+    
+    for I, L in ds.take(1): 
+        print(I.numpy().shape, L.numpy().shape)
+
+    timesteps = 10
+    beta, alpha, gamma = compute_beta_alpha2(timesteps, args.beta_end, args.beta_start, 0, 0.1)
+    # Inference with loaded I/L
+    TS = list(range(timesteps))
+    stepdata = list(zip(TS, beta, alpha, gamma))
+    stepdata.reverse()
+    print(TS)
+    # Random noise
+    Z = np.random.normal(loc=0, scale=1.0, size=I.shape)
+    print("SHAPE:", Z.shape)
+    Zs = []
+
+    # Loop over timesteps
+    for ts, b, a, g in stepdata:
+        for st in range(1):
+            Zs.append(Z)
+        
+            # All examples get the same time index
+            t_tensor = ts * np.ones(shape=(I.shape[0], 1))
+        
+            # Predict the noise
+            delta = model.predict(x={'image_input': Z, 'time_input': t_tensor, 'label_input': L})
+
+            # Adjust the image
+            Z = Z/np.sqrt(1-b) - delta * b / (np.sqrt(1-a) * np.sqrt(1-b))
+
+            if ts > 0:
+                # Add exploratory noise
+                noise = np.random.normal(loc=0, scale=1.0, size=I.shape)
+                Z = Z + g * noise
+
+    # Final step
+    Zs.append(Z)
+
+    # Visualization
+    #   You will need to play with this
+
+    i=0
+    cols = 10
+    fig, axs = plt.subplots(len(Zs)//cols+2, cols, figsize=(20,20))
+
+    cl = np.argmax(L[i,:,:,:], axis=-1)
+    axs[0,0].imshow(cl, vmax=6, vmin=0)
+    axs[0,1].imshow(I[i,:,:,:])
+
+    for j in range(cols):
+        axs[0,j].set_xticks([])
+        axs[0,j].set_yticks([])
+
+
+    for j, Z in enumerate(Zs):
+        axs[j//cols+1, j%cols].imshow(convert_image(Z[i,:,:,:]))
+        axs[j//cols+1, j%cols].set_xticks([])
+        axs[j//cols+1, j%cols].set_yticks([])
+
 def prediction_example_from_a_model(args, model, fold, timestamps, num_examples=3, filename="predict_example.png"):
     """
     Plots a few examples of predictions from a model.
@@ -119,7 +191,7 @@ def prediction_example_from_a_model(args, model, fold, timestamps, num_examples=
         time_sampling_exponent=args.time_sampling_exponent
     )
 
-    nsteps = args.nsteps
+    nsteps = 10
 
     alpha_tf = tf.constant(alpha_np, dtype=tf.float32)
     patch_size = 256
@@ -149,8 +221,8 @@ def prediction_example_from_a_model(args, model, fold, timestamps, num_examples=
                 'time_input': time_input,
             }
 
-            for k, v in model_inputs.items():
-                print(f"{k}:", v.shape)
+            # for k, v in model_inputs.items():
+            #    print(f"{k}:", v.shape)
             
             predicted_noise = model.predict(x=model_inputs, verbose=0)[0]
 
@@ -320,7 +392,8 @@ if __name__ == "__main__":
     )
 
     # Example of prediction from a model
-    prediction_example_from_a_model(args, models[0], 0, timestamps=10, num_examples=2, filename="figure_2.png")
+    # prediction_example_from_a_model(args, models[0], 0, timestamps=10, num_examples=2, filename="figure_2.png")
+    predict_example(args, models[0])
 
     # generate_figure2(models[0], alpha, sigma, patch_size=256, nsteps=50, seed=None, save_path='figure2.png')
 
