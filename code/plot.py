@@ -163,7 +163,7 @@ def prediction_example_from_a_model(args, model, fold, timestamps, num_examples=
             pred_denoised = convert_image(pred_denoised.numpy())
 
             ax = axes[t, col] if num_examples > 1 else axes[t]
-            ax.imshow(pred_denoised)
+            ax.imshow(pred_denoised[col,:,:,:])
             if col == 0:
                 ax.set_ylabel(f"Step {t}", fontsize=10)
             ax.axis('off')
