@@ -105,7 +105,7 @@ def predict_example(args, model):
         print(I.numpy().shape, L.numpy().shape)
 
     timesteps = 10
-    beta, alpha, gamma = compute_beta_alpha2(timesteps, args.beta_end, args.beta_start, 0, 0.1)
+    beta, alpha, gamma = compute_beta_alpha2(timesteps, 0.0001, 0.02, 0, 0.1)
     # Inference with loaded I/L
     TS = list(range(timesteps))
     stepdata = list(zip(TS, beta, alpha, gamma))
