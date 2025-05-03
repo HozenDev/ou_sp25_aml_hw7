@@ -32,9 +32,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 import os
 import pickle
+import keras
 
 from sklearn.metrics import confusion_matrix
 from parser import check_args, create_parser
+from diffusion_tools import PositionEncoder
     
 #########################################
 #             Load Results              #
@@ -50,7 +52,10 @@ def load_trained_model(model_dir, substring_name):
         raise ValueError(f"No model found in {model_dir} matching {substring_name}")
 
     model_path = os.path.join(model_dir, model_files[0])
-    model = tf.keras.models.load_model(model_path)
+    model = tf.keras.models.load_model(model_path, custom_objects={'PositionEncoder': PositionEncoder,
+                                                                   'ExpandDims': keras.src.ops.numpy.ExpandDims,
+                                                                   'Tile': keras.src.ops.numpy.Tile,
+                                                                   'mse': 'mse'})
 
     return model
 
@@ -101,18 +106,10 @@ def predict_example(args, model):
                                 num_parallel_calls=4)
     
     I, L = next(iter(ds))  # One batch
-    batch_size = tf.shape(I)[0]
     print("Sample batch:", I.shape, L.shape)
 
     timesteps = 10
     beta, alpha, gamma = compute_beta_alpha2(timesteps, 0.0001, 0.02, 0, 0.1)
-
-    input_image = I['input_image']
-    label_image = I['label_input']
-
-    # Use the final timestep (most noisy) to start reverse sampling
-    t_init = tf.constant([timesteps - 1], dtype=tf.int32)
-    L_oh, T, I_noised, _ = create_diffusion_example(input_image, label_image, 256, alpha=alpha, t=t_init)
 
     # Start from random noise
     Z = np.random.normal(loc=0, scale=1.0, size=(args.batch, 256, 256, 3)).astype(np.float32)
@@ -125,7 +122,7 @@ def predict_example(args, model):
         # Predict noise
         delta = model.predict({
             'image_input': tf.convert_to_tensor(Z),
-            'label_input': L_oh,
+            'label_input': L,
             'time_input': t_tensor
         }, verbose=0)
 
@@ -144,9 +141,9 @@ def predict_example(args, model):
 
     fig, axs = plt.subplots(rows, cols, figsize=(20, 2 * rows))
 
-    axs[0, 0].imshow(np.argmax(L_oh[i], axis=-1), vmin=0, vmax=6)
+    axs[0, 0].imshow(np.argmax(L[i], axis=-1), vmin=0, vmax=6)
     axs[0, 0].set_title("Label")
-    axs[0, 1].imshow(convert_image(I_noised[i]))
+    axs[0, 1].imshow(convert_image(Z[i]))
     axs[0, 1].set_title("Input")
 
     for j, z in enumerate(Zs):
