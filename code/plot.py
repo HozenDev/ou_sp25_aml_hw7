@@ -106,12 +106,13 @@ def predict_example(args, model):
 
     timesteps = 10
     beta, alpha, gamma = compute_beta_alpha2(timesteps, 0.0001, 0.02, 0, 0.1)
-    alpha = alpha.astype(np.float32)
 
+    input_image = I['input_image']
+    label_image = I['label_input']
 
     # Use the final timestep (most noisy) to start reverse sampling
     t_init = tf.constant([timesteps - 1], dtype=tf.int32)
-    L_oh, T, I_noised, _ = create_diffusion_example(I, L, 256, alpha=alpha, t=t_init)
+    L_oh, T, I_noised, _ = create_diffusion_example(input_image, label_image, 256, alpha=alpha, t=t_init)
 
     # Start from random noise
     Z = np.random.normal(loc=0, scale=1.0, size=(args.batch, 256, 256, 3)).astype(np.float32)
