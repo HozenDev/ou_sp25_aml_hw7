@@ -94,19 +94,19 @@ def load_results(results_dir):
 
 def predict_example(args, model):
     # Load validation data
-    ds = create_single_dataset(base_dir=args.dataset, 
-                                full_sat=False,
-                                partition='valid',
-                                patch_size=256, 
-                                fold=0,
-                                cache_path=None, 
-                                repeat=True, 
-                                batch_size=args.batch, 
-                                prefetch=2, 
-                                num_parallel_calls=4)
+    ds = create_single_dataset(base_dir=args.dataset,
+                               full_sat=False,
+                               partition='valid',
+                               patch_size=256,
+                               fold=0,
+                               cache_path=None,
+                               repeat=True,
+                               batch_size=8,
+                               prefetch=2,
+                               num_parallel_calls=4)
     
-    I, L = next(iter(ds))  # One batch
-    print("Sample batch:", I.shape, L.shape)
+    I, L = next(iter(ds))
+    print(I.numpy().shape, L.numpy().shape)
 
     timesteps = 10
     beta, alpha, gamma = compute_beta_alpha2(timesteps, 0.0001, 0.02, 0, 0.1)
