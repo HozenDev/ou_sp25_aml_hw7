@@ -103,10 +103,14 @@ def predict_example(args, model):
     
     for I, L in ds.take(1): 
         print(I.numpy().shape, L.numpy().shape)
-        I = I[..., :3]  # RGB only
 
     timesteps = 10
     beta, alpha, gamma = compute_beta_alpha2(timesteps, 0.0001, 0.02, 0, 0.1)
+
+    L, T, I, _ = create_diffusion_example(I, L, 256, alpha=alpha, t=tf.constant([timesteps], dtype=tf.int32))
+
+    print("SHAPE:", L.shape, T.shape, I.shape)
+    
     # Inference with loaded I/L
     TS = list(range(timesteps))
     stepdata = list(zip(TS, beta, alpha, gamma))
