@@ -111,7 +111,7 @@ def predict_example(args, model):
     )
     
     I, L = next(iter(ds))
-    print(I['image_input'].numpy().shape, L.numpy().shape)
+    print(I['image_input'].numpy().shape, I['label_input'].numpy().shape)
 
     # Start from random noise
     Z = np.random.normal(loc=0, scale=1.0, size=(args.batch, 256, 256, 3)).astype(np.float32)
@@ -124,7 +124,7 @@ def predict_example(args, model):
         # Predict noise
         delta = model.predict({
             'image_input': tf.convert_to_tensor(Z),
-            'label_input': L,
+            'label_input': I['label_input'],
             'time_input': t_tensor
         }, verbose=0)
 
