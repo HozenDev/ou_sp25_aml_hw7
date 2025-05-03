@@ -97,12 +97,11 @@ def predict_example(args, model):
     timesteps = 10
     beta, alpha, gamma = compute_beta_alpha2(timesteps, 0.0001, 0.02, 0, 0.1)
 
-    ds, _ = create_diffusion_dataset(
-        alpha=alpha,
+    ds = create_single_dataset(
         base_dir=args.dataset,
         patch_size=256,
         fold=0,
-        filt='*[012345678]',
+        filt='*[9]',
         cache_dir=args.cache,
         repeat=True,
         batch_size=8,
@@ -111,7 +110,7 @@ def predict_example(args, model):
     )
     
     I, L = next(iter(ds))
-    print(I['image_input'].numpy().shape, I['label_input'].numpy().shape)
+    print(I.numpy().shape, L.numpy().shape)
 
     # Start from random noise
     Z = np.random.normal(loc=0, scale=1.0, size=(args.batch, 256, 256, 3)).astype(np.float32)
@@ -124,7 +123,7 @@ def predict_example(args, model):
         # Predict noise
         delta = model.predict({
             'image_input': tf.convert_to_tensor(Z),
-            'label_input': I['label_input'],
+            'label_input': L,
             'time_input': t_tensor
         }, verbose=0)
 
