@@ -98,7 +98,6 @@ def execute_exp(args, multi_gpus:int=1):
     if args.verbose >= 3:
         print('Starting data flow')
 
-    # Compute alpha schedule for HW7 diffusion
     _, alpha, _ = compute_beta_alpha(
         nsteps=args.nsteps,
         beta_start=0.0001,

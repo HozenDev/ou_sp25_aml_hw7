@@ -98,7 +98,7 @@ def predict_example(args, model):
     beta, alpha, gamma = compute_beta_alpha2(timesteps, 0.0001, 0.02, 0, 0.1)
 
     ds, _ = create_diffusion_dataset(
-        alpha=None,
+        alpha=alpha,
         base_dir=args.dataset,
         patch_size=256,
         fold=0,
