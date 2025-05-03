@@ -381,7 +381,12 @@ def create_diffusion_example(I: tf.float32, L: tf.float32, patch_size: int, alph
     I = tf.multiply(I, 2.0) - 1.0
 
     # Output image is a blend of the original image and the noise
-    image = tf.multiply(I, tf.math.sqrt(a)) + tf.multiply(noise, tf.math.sqrt(1 - a))
+    part_1 = tf.multiply(I, tf.math.sqrt(a))
+    part_2 = tf.multiply(noise, tf.math.sqrt(1 - a))
+
+    print("SHAPE", part_1.shape, part_2.shape)
+    
+    image = tf.add(part_1, part_2)
 
     # TODO
     L = tf.one_hot(L, 7)
