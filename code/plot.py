@@ -111,7 +111,7 @@ def predict_example(args, model):
     )
     
     I, L = next(iter(ds))
-    print(I.numpy().shape, L.numpy().shape)
+    print(I['image_input'].numpy().shape, L.numpy().shape)
 
     # Start from random noise
     Z = np.random.normal(loc=0, scale=1.0, size=(args.batch, 256, 256, 3)).astype(np.float32)
