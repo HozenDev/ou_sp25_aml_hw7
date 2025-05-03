@@ -88,84 +88,76 @@ def load_results(results_dir):
 #########################################
 
 def predict_example(args, model):
-
-    # Sampling data set
+    # Load validation data
     ds = create_single_dataset(base_dir=args.dataset, 
-                         full_sat=False,
-                         partition='valid',
-                         patch_size=256, 
-                         fold=0,
-                         cache_path=None, 
-                         repeat=True, 
-                         batch_size=args.batch, 
-                         prefetch=2, 
-                         num_parallel_calls=4)
+                                full_sat=False,
+                                partition='valid',
+                                patch_size=256, 
+                                fold=0,
+                                cache_path=None, 
+                                repeat=True, 
+                                batch_size=args.batch, 
+                                prefetch=2, 
+                                num_parallel_calls=4)
     
-    for I, L in ds.take(1): 
-        print(I.numpy().shape, L.numpy().shape)
+    I, L = next(iter(ds))  # One batch
+    batch_size = tf.shape(I)[0]
+    print("Sample batch:", I.shape, L.shape)
 
     timesteps = 10
     beta, alpha, gamma = compute_beta_alpha2(timesteps, 0.0001, 0.02, 0, 0.1)
 
-    L, T, I, _ = create_diffusion_example(I, L, 256, alpha=alpha, t=tf.constant([timesteps], dtype=tf.int32))
+    # Use the final timestep (most noisy) to start reverse sampling
+    t_init = tf.constant([timesteps - 1], dtype=tf.int32)
+    L_oh, T, I_noised, _ = create_diffusion_example(I, L, 256, alpha=alpha, t=t_init)
 
-    print("SHAPE:", L.shape, T.shape, I.shape)
-    
-    # Inference with loaded I/L
-    TS = list(range(timesteps))
-    stepdata = list(zip(TS, beta, alpha, gamma))
-    stepdata.reverse()
-    print(TS)
-    # Random noise
-    Z = np.random.normal(loc=0, scale=1.0, size=(8, 256, 256, 3))
-    print("SHAPE:", Z.shape)
+    # Start from random noise
+    Z = np.random.normal(loc=0, scale=1.0, size=(args.batch, 256, 256, 3)).astype(np.float32)
     Zs = []
 
-    # Loop over timesteps
-    for ts, b, a, g in stepdata:
-        for st in range(1):
-            Zs.append(Z)
-        
-            # All examples get the same time index
-            t_tensor = ts * np.ones(shape=(I.shape[0], 1))
-        
-            # Predict the noise
-            delta = model.predict(x={'image_input': Z, 'time_input': t_tensor, 'label_input': L})
+    # Reversed diffusion steps
+    for ts in reversed(range(timesteps)):
+        t_tensor = tf.constant(ts * np.ones((args.batch, 1)), dtype=tf.int32)
 
-            # Adjust the image
-            Z = Z/np.sqrt(1-b) - delta * b / (np.sqrt(1-a) * np.sqrt(1-b))
+        # Predict noise
+        delta = model.predict({
+            'image_input': tf.convert_to_tensor(Z),
+            'label_input': L_oh,
+            'time_input': t_tensor
+        }, verbose=0)
 
-            if ts > 0:
-                # Add exploratory noise
-                noise = np.random.normal(loc=0, scale=1.0, size=(8, 256, 256, 3))
-                Z = Z + g * noise
+        b, a, g = beta[ts], alpha[ts], gamma[ts]
+        Z = Z / np.sqrt(1 - b) - delta * b / (np.sqrt(1 - a) * np.sqrt(1 - b))
 
-    # Final step
-    Zs.append(Z)
+        if ts > 0:
+            Z += g * np.random.normal(size=Z.shape).astype(np.float32)
+
+        Zs.append(Z.copy())
 
     # Visualization
-    #   You will need to play with this
+    i = 0  # show the first example
+    cols = min(10, len(Zs))
+    rows = (len(Zs) + cols - 1) // cols + 2  # +2 for label and noised input
 
-    i=0
-    cols = 10
-    fig, axs = plt.subplots(len(Zs)//cols+2, cols, figsize=(20,20))
+    fig, axs = plt.subplots(rows, cols, figsize=(20, 2 * rows))
 
-    cl = np.argmax(L[i,:,:,:], axis=-1)
-    axs[0,0].imshow(cl, vmax=6, vmin=0)
-    axs[0,1].imshow(I[i,:,:,:3])
+    axs[0, 0].imshow(np.argmax(L_oh[i], axis=-1), vmin=0, vmax=6)
+    axs[0, 0].set_title("Label")
+    axs[0, 1].imshow(convert_image(I_noised[i]))
+    axs[0, 1].set_title("Input")
 
-    for j in range(cols):
-        axs[0,j].set_xticks([])
-        axs[0,j].set_yticks([])
+    for j, z in enumerate(Zs):
+        row, col = divmod(j, cols)
+        axs[row + 1, col].imshow(convert_image(z[i]))
+        axs[row + 1, col].set_title(f"Step {timesteps - 1 - j}")
+        axs[row + 1, col].axis('off')
 
-
-    for j, Z in enumerate(Zs):
-        axs[j//cols+1, j%cols].imshow(convert_image(Z[i,:,:,:]))
-        axs[j//cols+1, j%cols].set_xticks([])
-        axs[j//cols+1, j%cols].set_yticks([])
+    for ax in axs.flatten():
+        ax.set_xticks([]), ax.set_yticks([])
 
     plt.tight_layout()
     plt.savefig("figures/figure_2.png")
+    plt.close()
 
 def prediction_example_from_a_model(args, model, fold, timestamps, num_examples=3, filename="predict_example.png"):
     """
