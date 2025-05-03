@@ -97,17 +97,16 @@ def predict_example(args, model):
     timesteps = 10
     beta, alpha, gamma = compute_beta_alpha2(timesteps, 0.0001, 0.02, 0, 0.1)
 
-    ds = create_single_dataset(
-        base_dir=args.dataset,
-        patch_size=256,
-        fold=0,
-        filt='*[9]',
-        cache_dir=args.cache,
-        repeat=True,
-        batch_size=8,
-        prefetch=2,
-        num_parallel_calls=4
-    )
+    ds = create_single_dataset(base_dir=args.dataset,
+                               full_sat=False,
+                               partition='valid',
+                               patch_size=256,
+                               fold=0,
+                               cache_path=None,
+                               repeat=True,
+                               batch_size=8,
+                               prefetch=2,
+                               num_parallel_calls=4)
     
     I, L = next(iter(ds))
     print(I.numpy().shape, L.numpy().shape)
