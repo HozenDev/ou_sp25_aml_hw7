@@ -100,7 +100,7 @@ def predict_example(args, model):
     ds = create_single_dataset(base_dir=args.dataset,
                                full_sat=False,
                                partition='valid',
-                               patch_size=32,
+                               patch_size=256,
                                fold=0,
                                cache_path=None,
                                repeat=True,
