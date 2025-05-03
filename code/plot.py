@@ -112,7 +112,7 @@ def predict_example(args, model):
     stepdata.reverse()
     print(TS)
     # Random noise
-    Z = np.random.normal(loc=0, scale=1.0, size=I.shape)
+    Z = np.random.normal(loc=0, scale=1.0, size=(8, 256, 256, 3))
     print("SHAPE:", Z.shape)
     Zs = []
 
@@ -147,7 +147,7 @@ def predict_example(args, model):
 
     cl = np.argmax(L[i,:,:,:], axis=-1)
     axs[0,0].imshow(cl, vmax=6, vmin=0)
-    axs[0,1].imshow(I[i,:,:,:])
+    axs[0,1].imshow(I[i,:,:,:3])
 
     for j in range(cols):
         axs[0,j].set_xticks([])
