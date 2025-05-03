@@ -144,7 +144,7 @@ def predict_example(args, model):
 
     fig, axs = plt.subplots(rows, cols, figsize=(20, 2 * rows))
 
-    axs[0, 0].imshow(np.argmax(L[i], axis=-1), vmin=0, vmax=6)
+    axs[0, 0].imshow(np.argmax(label_input[i], axis=-1), vmin=0, vmax=6)
     axs[0, 0].set_title("Label")
     axs[0, 1].imshow(convert_image(Z[i]))
     axs[0, 1].set_title("Input")
