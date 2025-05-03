@@ -106,6 +106,8 @@ def predict_example(args, model):
 
     timesteps = 10
     beta, alpha, gamma = compute_beta_alpha2(timesteps, 0.0001, 0.02, 0, 0.1)
+    alpha = alpha.astype(np.float32)
+
 
     # Use the final timestep (most noisy) to start reverse sampling
     t_init = tf.constant([timesteps - 1], dtype=tf.int32)
