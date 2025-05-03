@@ -103,6 +103,7 @@ def predict_example(args, model):
     
     for I, L in ds.take(1): 
         print(I.numpy().shape, L.numpy().shape)
+        I = I[..., :3]  # RGB only
 
     timesteps = 10
     beta, alpha, gamma = compute_beta_alpha2(timesteps, 0.0001, 0.02, 0, 0.1)
@@ -132,7 +133,7 @@ def predict_example(args, model):
 
             if ts > 0:
                 # Add exploratory noise
-                noise = np.random.normal(loc=0, scale=1.0, size=I.shape)
+                noise = np.random.normal(loc=0, scale=1.0, size=(8, 256, 256, 3))
                 Z = Z + g * noise
 
     # Final step
