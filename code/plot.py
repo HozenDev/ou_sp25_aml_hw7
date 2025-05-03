@@ -100,7 +100,7 @@ def predict_example(args, model):
     ds = create_single_dataset(base_dir=args.dataset,
                                full_sat=False,
                                partition='valid',
-                               patch_size=256,
+                               patch_size=32,
                                fold=0,
                                cache_path=None,
                                repeat=True,
@@ -115,6 +115,9 @@ def predict_example(args, model):
     Z = np.random.normal(loc=0, scale=1.0, size=(args.batch, 256, 256, 3)).astype(np.float32)
     Zs = []
 
+    label_input = tf.cast(L, tf.int32)
+    label_input = tf.one_hot(label_input, depth=7)
+
     # Reversed diffusion steps
     for ts in reversed(range(timesteps)):
         t_tensor = tf.constant(ts * np.ones((args.batch, 1)), dtype=tf.int32)
@@ -122,7 +125,7 @@ def predict_example(args, model):
         # Predict noise
         delta = model.predict({
             'image_input': tf.convert_to_tensor(Z),
-            'label_input': L,
+            'label_input': label_input,
             'time_input': t_tensor
         }, verbose=0)
 
