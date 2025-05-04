@@ -271,7 +271,7 @@ def generate_figure2(model,
         sampled_images = denoised_images[::each_step][:nb_images]
         for j, im in enumerate(sampled_images):
             axs[2 + j].imshow(im)
-            axs[2 + j].set_title(f"t={nsteps - 1 - j * each_step}")
+            axs[2 + j].set_title(f"t={j * each_step}")
             axs[2 + j].axis('off')
 
         plt.suptitle(f"Figure 2 - Sample {i+1}: Denoising Sequence")
@@ -329,7 +329,7 @@ if __name__ == "__main__":
         model=models[0],
         dataset_dir=args.dataset,
         save_dir="./figures",
-        nsteps=15,
+        nsteps=30,
         beta_start=0.0001,
         beta_end=0.02,
         fold=0,
