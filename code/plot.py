@@ -52,10 +52,10 @@ def load_trained_model(model_dir, substring_name):
         raise ValueError(f"No model found in {model_dir} matching {substring_name}")
 
     model_path = os.path.join(model_dir, model_files[0])
-    model = tf.keras.models.load_model(model_path, custom_objects={'PositionEncoder': PositionEncoder,
-                                                                   'ExpandDims': keras.src.ops.numpy.ExpandDims,
-                                                                   'Tile': keras.src.ops.numpy.Tile,
-                                                                   'mse': 'mse'})
+    model = keras.models.load_model(model_path, custom_objects={'PositionEncoder': PositionEncoder,
+                                                                'ExpandDims': keras.src.ops.numpy.ExpandDims,
+                                                                'Tile': keras.src.ops.numpy.Tile,
+                                                                'mse': 'mse'})
 
     return model
 
@@ -162,198 +162,99 @@ def predict_example(args, model):
     plt.savefig("figures/figure_2.png")
     plt.close()
 
-def prediction_example_from_a_model(args, model, fold, timestamps, num_examples=3, filename="predict_example.png"):
+def generate_figure2(model,
+                     dataset_dir: str,
+                     save_dir: str = '.',
+                     nsteps: int = 50,
+                     beta_start: float = 0.0001,
+                     beta_end: float = 0.02,
+                     fold: int = 0,
+                     num_examples: int = 2,
+                     patch_size: int = 256):
     """
-    Plots a few examples of predictions from a model.
-
-    :params args: Command-line arguments
-    :params model: Model to use for prediction
-    :params fold: Fold number
-    :params num_examples: Number of examples to plot
-    :params filename: Filename to save the plot
+    Generate Figure 2: Step-by-step denoising images from noise using a trained diffusion model.
+    
+    :param model_path: Path to the saved .keras model.
+    :param dataset_dir: Base directory to Chesapeake dataset.
+    :param save_dir: Directory where the figures will be saved.
+    :param nsteps: Number of diffusion steps.
+    :param beta_start: Starting value for beta.
+    :param beta_end: Ending value for beta.
+    :param fold: Fold index to load validation examples from.
+    :param num_examples: Number of examples to visualize.
+    :param patch_size: Height/width of input patches.
     """
 
-    # Compute alpha schedule for HW7 diffusion
-    _, alpha_np, _ = compute_beta_alpha(
-        nsteps=args.nsteps,
-        beta_start=0.0001,
-        beta_end=0.02
-    )
+    # Compute alpha and sigma schedule
+    _, alpha, sigma = compute_beta_alpha(nsteps, beta_start, beta_end)
+    alpha_tf = tf.constant(alpha, dtype=tf.float32)
 
-    _, dataset = create_diffusion_dataset(
-        alpha=alpha,
-        base_dir=args.dataset,
-        patch_size=args.image_size[0],
+    # Load dataset
+    ds = create_single_dataset(
+        base_dir=dataset_dir,
+        full_sat=False,
+        patch_size=patch_size,
+        partition='train',
         fold=fold,
-        filt='*[012345678]',
-        cache_dir=args.cache,
-        repeat=True,
-        batch_size=args.batch,
-        prefetch=args.prefetch,
-        num_parallel_calls=args.num_parallel_calls,
-        time_sampling_exponent=args.time_sampling_exponent
+        filt='*9',
+        cache_path=None,
+        repeat=False,
+        shuffle=None,
+        batch_size=1,
+        prefetch=1,
+        num_parallel_calls=1
     )
 
-    nsteps = 10
+    # Take the desired number of examples
+    examples = list(ds.take(num_examples))
 
-    alpha_tf = tf.constant(alpha_np, dtype=tf.float32)
-    patch_size = 256
+    def denoise(label_img):
+        """Apply reverse diffusion process on a label image."""
+        label_onehot = tf.one_hot(label_img, 7)
+        x = tf.random.normal(shape=(patch_size, patch_size, 3))
+        imgs = []
 
-    fig, axes = plt.subplots(nsteps + 1, num_examples, figsize=(4 * num_examples, 3 * (nsteps + 1)))
+        for t in reversed(range(nsteps)):
+            t_tensor = tf.convert_to_tensor([[t]])
+            pe = PositionEncoder(max_steps=nsteps, max_dims=30)
+            t_embed = pe(t_tensor)
+            t_embed_image = tf.expand_dims(tf.expand_dims(t_embed, 1), 1)
+            t_embed_image = tf.tile(t_embed_image, [1, patch_size, patch_size, 1])
 
-    for col in range(num_examples):
-        try:
-            I, L = next(dataset.as_numpy_iterator())
-        except StopIteration:
-            break
-
-        label_tensor = I['label_input']
-        time_tensor = I['time_input']
-        image_tensor = I['image_input']
-        noise = L;
-        
-        for t in range(nsteps):
-            t_tensor = tf.constant([t], dtype=tf.int32)
-            _, _, noised_image, _ = create_diffusion_example(image_tensor, label_tensor, patch_size, alpha_tf, t_tensor)
-            time_input = t * np.ones(shape=(I['image_input'].shape[0], 1))
-
-            # Predict noise
-            model_inputs = {
-                'label_input': label_tensor,
-                'image_input': noised_image, 
-                'time_input': time_input,
+            inputs = {
+                'label_input': tf.expand_dims(label_onehot, 0),
+                'time_input': t_tensor,
+                'image_input': tf.expand_dims(x, 0)
             }
 
-            # for k, v in model_inputs.items():
-            #    print(f"{k}:", v.shape)
-            
-            predicted_noise = model.predict(x=model_inputs, verbose=0)[0]
+            predicted_noise = model(inputs, training=False)[0]
+            a_t = alpha_tf[t].numpy()
+            s_t = sigma[t]
 
-            a_t = tf.gather(alpha_tf, t_tensor)[0]
-            sqrt_a = tf.sqrt(a_t)
-            sqrt_1_a = tf.sqrt(1 - a_t)
+            x = (x - (1 - a_t) ** 0.5 * predicted_noise) / a_t ** 0.5
+            x = x + s_t * tf.random.normal(shape=x.shape)
 
-            # Denoise prediction
-            pred_denoised = (noised_image - sqrt_1_a * predicted_noise) / sqrt_a
-            pred_denoised = convert_image(pred_denoised.numpy())
+            imgs.append(convert_image(x.numpy()))
+        return imgs
 
-            ax = axes[t, col] if num_examples > 1 else axes[t]
-            ax.imshow(pred_denoised[col,:,:,:])
-            if col == 0:
-                ax.set_ylabel(f"Step {t}", fontsize=10)
-            ax.axis('off')
+    # Visualization
+    for i, (img, label) in enumerate(examples):
+        images = denoise(label[0].numpy())
 
-        # At the end: show true denoised
-        t_final = tf.constant([nsteps - 1], dtype=tf.int32)
-        _, _, noised_image_final, true_noise_final = create_diffusion_example(image_tensor, L, patch_size, alpha_tf, t_final)
-        a_final = tf.gather(alpha_tf, t_final)[0]
-        sqrt_a_final = tf.sqrt(a_final)
-        sqrt_1_a_final = tf.sqrt(1 - a_final)
-        true_denoised = (noised_image_final - sqrt_1_a_final * true_noise_final) / sqrt_a_final
-        true_denoised = convert_image(true_denoised.numpy())
+        fig, axs = plt.subplots(5, 10, figsize=(20, 10))
+        axs = axs.flatten()
+        for t, im in enumerate(images[::max(nsteps // 50, 1)]):
+            axs[t].imshow(im)
+            axs[t].axis('off')
+            axs[t].set_title(f"t={nsteps-1-t}")
 
-        ax = axes[-1, col] if num_examples > 1 else axes[-1]
-        ax.imshow(true_denoised[col,:,:,:])
-        if col == 0:
-            ax.set_ylabel("True", fontsize=12)
-        ax.axis('off')
+        plt.suptitle(f"Figure 2: Denoising Sequence for Sample {i+1}")
+        plt.tight_layout()
+        out_path = os.path.join(save_dir, f"figure2_sample{i+1}.png")
+        plt.savefig(out_path)
+        plt.show()
+        print(f"Saved: {out_path}")
 
-    plt.tight_layout()
-    plt.savefig(filename)
-
-def generate_figure2(model, alpha, sigma, patch_size=256, nsteps=50, seed=None, save_path='figure2.png'):
-    """
-    Generate and plot one sample diffusion sequence (Figure 2) using the trained model.
-    
-    Args:
-        model: Trained Keras diffusion model.
-        alpha: np.array of accumulated alpha values (length = nsteps).
-        sigma: np.array of sigma values (length = nsteps).
-        label_path: Path to a .npz file to extract image/label for conditioning.
-        patch_size: Size of image patches.
-        nsteps: Number of diffusion steps.
-        seed: Optional seed for reproducibility.
-        save_path: Where to save the resulting figure.
-    """
-
-    if seed is not None:
-        tf.random.set_seed(seed)
-        np.random.seed(seed)
-
-    # Load one image-label pair using the provided loader
-    ds_train, ds = create_diffusion_dataset(
-        alpha=alpha,
-        base_dir=args.dataset,
-        patch_size=args.image_size[0],
-        fold=0,
-        filt='*[012345678]',
-        cache_dir=args.cache,
-        repeat=True,
-        batch_size=args.batch,
-        prefetch=args.prefetch,
-        num_parallel_calls=args.num_parallel_calls,
-        time_sampling_exponent=args.time_sampling_exponent
-    )
-    
-    I = None
-    L = None
-    for I, L in ds.take(1):
-        break
-
-    # Use one-hot semantic label and normalize image to +/-1
-    L_oh = tf.one_hot(L, 7)
-    I = I[..., :3]  # RGB only
-    I = tf.cast(I, tf.float32)
-    L_oh = tf.cast(L_oh, tf.float32)
-
-    # Start from pure noise
-    current = tf.random.normal(shape=(1, patch_size, patch_size, 3))
-
-    frames = []
-
-    for t in reversed(range(nsteps)):
-        t_tensor = tf.constant([[t]], dtype=tf.int32)
-
-        # Predict noise to remove
-        model_input = {
-            'label_input': tf.expand_dims(L_oh, 0),
-            'time_input': t_tensor,
-            'image_input': current
-        }
-        predicted_noise = model(model_input)
-
-        # Update current image using Equation 18.5-like logic
-        a_t = alpha[t]
-        b_t = 1 - a_t
-        s_t = sigma[t]
-
-        current = (1 / np.sqrt(1 - b_t)) * (current - ((1 - a_t) / np.sqrt(a_t)) * predicted_noise)
-
-        if t > 0:
-            current += s_t * tf.random.normal(shape=current.shape)
-
-        # Store current step for plotting
-        image_np = convert_image(current[0].numpy())  # shape: HWC
-        frames.append(image_np)
-
-    # === PLOT ===
-    ncols = 5
-    nrows = int(np.ceil(len(frames) / ncols))
-    fig, axes = plt.subplots(nrows, ncols, figsize=(15, 3 * nrows))
-    axes = axes.flat
-
-    for idx in range(nrows * ncols):
-        ax = axes[idx]
-        if idx < len(frames):
-            ax.imshow(frames[idx])
-            ax.set_title(f"Step {nsteps - 1 - idx}")
-        ax.axis('off')
-
-    plt.tight_layout()
-    plt.savefig(save_path)
-    plt.show()
-
-    return frames
 
 #########################################
 #            Main Function              #
@@ -396,7 +297,18 @@ if __name__ == "__main__":
 
     # Example of prediction from a model
     # prediction_example_from_a_model(args, models[0], 0, timestamps=10, num_examples=2, filename="figure_2.png")
-    predict_example(args, models[0])
+    # predict_example(args, models[0])
+    generate_figure2(
+        model=models[0],
+        dataset_dir=args.dataset,
+        save_dir="./figures",
+        nsteps=50,
+        beta_start=0.0001,
+        beta_end=0.02,
+        fold=0,
+        num_examples=2,
+        patch_size=256
+    )
 
     # generate_figure2(models[0], alpha, sigma, patch_size=256, nsteps=50, seed=None, save_path='figure2.png')
 
