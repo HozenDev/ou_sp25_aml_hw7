@@ -249,13 +249,12 @@ def generate_figure2(model,
         return colormap[label_img]
 
     for i, (img, label) in enumerate(examples):
-        rgb_image = img[0, :, :, :3].numpy()  # Original image in 0–1
+        rgb_image = img[0, :, :, :3].numpy() 
         label_img = label[0].numpy()
         label_rgb = label_to_rgb(label_img)
 
         denoised_images = denoise(label_img)
 
-        # Create plot: 2 rows — original/label + 10 denoising steps
         fig, axs = plt.subplots(1, 10, figsize=(22, 5))
         axs = axs.flatten()
 
@@ -267,10 +266,12 @@ def generate_figure2(model,
         axs[1].set_title("Label")
         axs[1].axis('off')
 
-        sampled_images = denoised_images[::max(nsteps // 8, 1)][:8]  # Reduce to 8 timesteps
+        nb_images = 8
+        each_step = max(nsteps // nb_images, 1)
+        sampled_images = denoised_images[::each_step][:nb_images]
         for j, im in enumerate(sampled_images):
             axs[2 + j].imshow(im)
-            axs[2 + j].set_title(f"t={nsteps - 1 - j * (nsteps // 8)}")
+            axs[2 + j].set_title(f"t={nsteps - 1 - j * each_step}")
             axs[2 + j].axis('off')
 
         plt.suptitle(f"Figure 2 - Sample {i+1}: Denoising Sequence")
@@ -328,7 +329,7 @@ if __name__ == "__main__":
         model=models[0],
         dataset_dir=args.dataset,
         save_dir="./figures",
-        nsteps=50,
+        nsteps=15,
         beta_start=0.0001,
         beta_end=0.02,
         fold=0,
