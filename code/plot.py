@@ -92,76 +92,6 @@ def load_results(results_dir):
 #             Plot Methods              #
 #########################################
 
-def predict_example(args, model):
-    # Load validation data
-    timesteps = 10
-    beta, alpha, gamma = compute_beta_alpha2(timesteps, 0.0001, 0.02, 0, 0.1)
-
-    ds = create_single_dataset(base_dir=args.dataset,
-                               full_sat=False,
-                               partition='valid',
-                               patch_size=256,
-                               fold=0,
-                               cache_path=None,
-                               repeat=True,
-                               batch_size=8,
-                               prefetch=2,
-                               num_parallel_calls=4)
-    
-    I, L = next(iter(ds))
-    print(I.numpy().shape, L.numpy().shape)
-
-    # Start from random noise
-    Z = np.random.normal(loc=0, scale=1.0, size=(args.batch, 256, 256, 3)).astype(np.float32)
-    Zs = []
-
-    label_input = tf.cast(L, tf.int32)
-    label_input = tf.one_hot(label_input, depth=7)
-
-    # Reversed diffusion steps
-    for ts in reversed(range(timesteps)):
-        t_tensor = tf.constant(ts * np.ones((args.batch, 1)), dtype=tf.int32)
-
-        # Predict noise
-        delta = model.predict({
-            'image_input': tf.convert_to_tensor(Z),
-            'label_input': label_input,
-            'time_input': t_tensor
-        }, verbose=0)
-
-        b, a, g = beta[ts], alpha[ts], gamma[ts]
-        Z = Z / np.sqrt(1 - b) - delta * b / (np.sqrt(1 - a) * np.sqrt(1 - b))
-
-        if ts > 0:
-            Z += g * np.random.normal(size=Z.shape).astype(np.float32)
-
-        Zs.append(Z.copy())
-
-    # Visualization
-    i = 0  # show the first example
-    cols = min(10, len(Zs))
-    rows = (len(Zs) + cols - 1) // cols + 2  # +2 for label and noised input
-
-    fig, axs = plt.subplots(rows, cols, figsize=(20, 2 * rows))
-
-    axs[0, 0].imshow(np.argmax(label_input[i], axis=-1), vmin=0, vmax=6)
-    axs[0, 0].set_title("Label")
-    axs[0, 1].imshow(convert_image(Z[i]))
-    axs[0, 1].set_title("Input")
-
-    for j, z in enumerate(Zs):
-        row, col = divmod(j, cols)
-        axs[row + 1, col].imshow(convert_image(z[i]))
-        axs[row + 1, col].set_title(f"Step {timesteps - 1 - j}")
-        axs[row + 1, col].axis('off')
-
-    for ax in axs.flatten():
-        ax.set_xticks([]), ax.set_yticks([])
-
-    plt.tight_layout()
-    plt.savefig("figures/figure_2.png")
-    plt.close()
-
 def generate_figure2(model,
                      dataset_dir: str,
                      save_dir: str = '.',
@@ -281,7 +211,117 @@ def generate_figure2(model,
         plt.show()
         print(f"Saved: {out_path}")
 
+def generate_figure3(model,
+                     dataset_dir: str,
+                     save_path: str = 'figure3_gallery.png',
+                     nsteps: int = 50,
+                     beta_start: float = 0.0001,
+                     beta_end: float = 0.02,
+                     fold: int = 0,
+                     num_examples: int = 12,
+                     patch_size: int = 256):
+    """
+    Generate Figure 3: A gallery of final generated images vs. their label maps.
 
+    :param model_path: Path to trained .keras diffusion model.
+    :param dataset_dir: Chesapeake dataset base directory.
+    :param save_path: Path to save the figure.
+    :param nsteps: Number of diffusion steps.
+    :param beta_start: Starting beta value.
+    :param beta_end: Ending beta value.
+    :param fold: Dataset fold.
+    :param num_examples: Number of samples to include in the gallery.
+    :param patch_size: Image size.
+    """
+
+    _, alpha, sigma = compute_beta_alpha(nsteps, beta_start, beta_end)
+    alpha_tf = tf.constant(alpha, dtype=tf.float32)
+
+    ds = create_single_dataset(
+        base_dir=dataset_dir,
+        full_sat=True,
+        patch_size=patch_size,
+        partition='train',
+        fold=fold,
+        filt='*9',
+        cache_path=None,
+        repeat=False,
+        shuffle=None,
+        batch_size=1,
+        prefetch=1,
+        num_parallel_calls=1
+    )
+
+    examples = list(ds.take(num_examples))
+
+    def denoise_final(label_img):
+        label_onehot = tf.one_hot(label_img, 7)
+        x = tf.random.normal(shape=(patch_size, patch_size, 3))
+
+        for t in reversed(range(nsteps)):
+            t_tensor = tf.convert_to_tensor([[t]])
+            pe = PositionEncoder(max_steps=nsteps, max_dims=30)
+            t_embed = pe(t_tensor)
+            t_embed_image = keras.ops.expand_dims(keras.ops.expand_dims(t_embed, axis=1), axis=1)
+            t_embed_image = keras.ops.tile(t_embed_image, [1, patch_size, patch_size, 1])
+
+            inputs = {
+                'label_input': keras.ops.expand_dims(label_onehot, axis=0),
+                'time_input': t_tensor,
+                'image_input': keras.ops.expand_dims(x, axis=0)
+            }
+
+            predicted_noise = model(inputs, training=False)[0]
+            a_t = alpha_tf[t].numpy()
+            s_t = sigma[t]
+
+            x = (x - (1 - a_t) ** 0.5 * predicted_noise) / (a_t ** 0.5)
+            x = x + s_t * tf.random.normal(shape=x.shape)
+
+        return convert_image(x.numpy())
+
+    def label_to_rgb(label_img):
+        colormap = np.array([
+            [0, 0, 0],         # 0: No class
+            [0, 0, 255],       # 1: Water
+            [34, 139, 34],     # 2: Forest
+            [210, 180, 140],   # 3: Field
+            [165, 42, 42],     # 4: Barren
+            [128, 128, 128],   # 5: Impervious other
+            [255, 255, 0]      # 6: Road
+        ], dtype=np.uint8)
+        return colormap[label_img]
+
+    # Plotting setup
+    ncols = 4
+    nrows = int(np.ceil(num_examples / ncols))
+    fig, axs = plt.subplots(nrows, ncols, figsize=(ncols * 4, nrows * 4))
+
+    if nrows == 1:
+        axs = np.expand_dims(axs, axis=0)
+
+    for idx, (img, label) in enumerate(examples):
+        row, col = divmod(idx, ncols)
+        label_img = label[0].numpy()
+        label_rgb = label_to_rgb(label_img)
+        generated = denoise_final(label_img)
+
+        combined = np.concatenate([label_rgb, (generated * 255).astype(np.uint8)], axis=1)
+
+        axs[row, col].imshow(combined)
+        axs[row, col].axis('off')
+        axs[row, col].set_title(f"Sample {idx+1}: Label → Generated")
+
+    # Hide unused axes
+    for idx in range(len(examples), nrows * ncols):
+        row, col = divmod(idx, ncols)
+        axs[row, col].axis('off')
+
+    plt.suptitle("Figure 3: Gallery of Final Generated Images", fontsize=16)
+    plt.tight_layout()
+    plt.savefig(save_path)
+    plt.show()
+    print(f"Saved: {save_path}")
 
 #########################################
 #            Main Function              #
@@ -322,14 +362,11 @@ if __name__ == "__main__":
         beta_end=0.02
     )
 
-    # Example of prediction from a model
-    # prediction_example_from_a_model(args, models[0], 0, timestamps=10, num_examples=2, filename="figure_2.png")
-    # predict_example(args, models[0])
     generate_figure2(
         model=models[0],
         dataset_dir=args.dataset,
         save_dir="./figures",
-        nsteps=30,
+        nsteps=24,
         beta_start=0.0001,
         beta_end=0.02,
         fold=0,
@@ -337,6 +374,17 @@ if __name__ == "__main__":
         patch_size=256
     )
 
-    # generate_figure2(models[0], alpha, sigma, patch_size=256, nsteps=50, seed=None, save_path='figure2.png')
+    generate_figure3(
+        model=models[0],
+        dataset_dir=args.dataset,
+        fold=0,
+        num_examples=12,
+        patch_size=256,
+        beta_start=0.0001,
+        beta_end=0.02,
+        save_path="./figures/figure3_gallery.png",
+        nsteps=24,
+    )
+
 
 
