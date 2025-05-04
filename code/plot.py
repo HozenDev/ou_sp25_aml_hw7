@@ -256,7 +256,7 @@ def generate_figure2(model,
         denoised_images = denoise(label_img)
 
         # Create plot: 2 rows — original/label + 10 denoising steps
-        fig, axs = plt.subplots(2, 10, figsize=(22, 5))
+        fig, axs = plt.subplots(1, 10, figsize=(22, 5))
         axs = axs.flatten()
 
         axs[0].imshow(rgb_image)
