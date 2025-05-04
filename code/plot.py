@@ -172,8 +172,8 @@ def generate_figure2(model,
                      num_examples: int = 2,
                      patch_size: int = 256):
     """
-    Generate Figure 2: Step-by-step denoising images from noise using a trained diffusion model.
-    
+    Generate Figure 2: Denoising sequence with original and label images.
+
     :param model_path: Path to the saved .keras model.
     :param dataset_dir: Base directory to Chesapeake dataset.
     :param save_dir: Directory where the figures will be saved.
@@ -185,14 +185,12 @@ def generate_figure2(model,
     :param patch_size: Height/width of input patches.
     """
 
-    # Compute alpha and sigma schedule
     _, alpha, sigma = compute_beta_alpha(nsteps, beta_start, beta_end)
     alpha_tf = tf.constant(alpha, dtype=tf.float32)
 
-    # Load dataset
     ds = create_single_dataset(
         base_dir=dataset_dir,
-        full_sat=False,
+        full_sat=True,  # Use full_sat=True to get original image (including RGB)
         patch_size=patch_size,
         partition='train',
         fold=fold,
@@ -205,55 +203,83 @@ def generate_figure2(model,
         num_parallel_calls=1
     )
 
-    # Take the desired number of examples
     examples = list(ds.take(num_examples))
 
     def denoise(label_img):
-        """Apply reverse diffusion process on a label image."""
+        """Perform reverse diffusion on a label image."""
         label_onehot = tf.one_hot(label_img, 7)
         x = tf.random.normal(shape=(patch_size, patch_size, 3))
-        imgs = []
+        images = []
 
         for t in reversed(range(nsteps)):
             t_tensor = tf.convert_to_tensor([[t]])
             pe = PositionEncoder(max_steps=nsteps, max_dims=30)
             t_embed = pe(t_tensor)
-            t_embed_image = tf.expand_dims(tf.expand_dims(t_embed, 1), 1)
-            t_embed_image = tf.tile(t_embed_image, [1, patch_size, patch_size, 1])
+            t_embed_image = keras.ops.expand_dims(keras.ops.expand_dims(t_embed, axis=1), axis=1)
+            t_embed_image = keras.ops.tile(t_embed_image, [1, patch_size, patch_size, 1])
 
             inputs = {
-                'label_input': tf.expand_dims(label_onehot, 0),
+                'label_input': keras.ops.expand_dims(label_onehot, axis=0),
                 'time_input': t_tensor,
-                'image_input': tf.expand_dims(x, 0)
+                'image_input': keras.ops.expand_dims(x, axis=0)
             }
 
             predicted_noise = model(inputs, training=False)[0]
             a_t = alpha_tf[t].numpy()
             s_t = sigma[t]
 
-            x = (x - (1 - a_t) ** 0.5 * predicted_noise) / a_t ** 0.5
+            x = (x - (1 - a_t) ** 0.5 * predicted_noise) / (a_t ** 0.5)
             x = x + s_t * tf.random.normal(shape=x.shape)
 
-            imgs.append(convert_image(x.numpy()))
-        return imgs
+            images.append(convert_image(x.numpy()))
 
-    # Visualization
+        return images
+
+    def label_to_rgb(label_img):
+        """Map class indices to RGB for visualization."""
+        colormap = np.array([
+            [0, 0, 0],           # 0: No class (black)
+            [0, 0, 255],         # 1: Water (blue)
+            [34, 139, 34],       # 2: Forest (green)
+            [210, 180, 140],     # 3: Field (tan)
+            [165, 42, 42],       # 4: Barren (brown)
+            [128, 128, 128],     # 5: Impervious other (gray)
+            [255, 255, 0]        # 6: Road (yellow)
+        ], dtype=np.uint8)
+        return colormap[label_img]
+
     for i, (img, label) in enumerate(examples):
-        images = denoise(label[0].numpy())
+        rgb_image = img[0, :, :, :3].numpy()  # Original image in 0–1
+        label_img = label[0].numpy()
+        label_rgb = label_to_rgb(label_img)
 
-        fig, axs = plt.subplots(5, 10, figsize=(20, 10))
+        denoised_images = denoise(label_img)
+
+        # Create plot: 2 rows — original/label + 10 denoising steps
+        fig, axs = plt.subplots(2, 10, figsize=(22, 5))
         axs = axs.flatten()
-        for t, im in enumerate(images[::max(nsteps // 50, 1)]):
-            axs[t].imshow(im)
-            axs[t].axis('off')
-            axs[t].set_title(f"t={nsteps-1-t}")
 
-        plt.suptitle(f"Figure 2: Denoising Sequence for Sample {i+1}")
+        axs[0].imshow(rgb_image)
+        axs[0].set_title("Original")
+        axs[0].axis('off')
+
+        axs[1].imshow(label_rgb)
+        axs[1].set_title("Label")
+        axs[1].axis('off')
+
+        sampled_images = denoised_images[::max(nsteps // 8, 1)][:8]  # Reduce to 8 timesteps
+        for j, im in enumerate(sampled_images):
+            axs[2 + j].imshow(im)
+            axs[2 + j].set_title(f"t={nsteps - 1 - j * (nsteps // 8)}")
+            axs[2 + j].axis('off')
+
+        plt.suptitle(f"Figure 2 - Sample {i+1}: Denoising Sequence")
         plt.tight_layout()
         out_path = os.path.join(save_dir, f"figure2_sample{i+1}.png")
         plt.savefig(out_path)
         plt.show()
         print(f"Saved: {out_path}")
+
 
 
 #########################################
